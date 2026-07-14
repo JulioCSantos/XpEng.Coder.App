@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="XpEng.Coder/XpEng.Coder03.Views/XpEng.Coder03.Views.csproj" />
+  <Project Path="XpEng.Coder/XpEng.Coder06.Data/XpEng.Coder06.Data.csproj" />
+  <Project Path="XpEng.Coder/XpEng.Coder06.ViewModels/XpEng.Coder06.ViewModels.csproj" />
+  <Project Path="XpEng.Coder/XpEng.Coder09.Models/XpEng.Coder09.Models.csproj" />
+  <Project Path="XpEng.Coder/XpEng.Coder12.Services/XpEng.Coder12.Services.csproj" Id="8052b701-1de8-48d4-8463-3aa1141efc37" />
+  <Project Path="XpEng.Coder/XpEng.Coder88.Infrastructure/XpEng.Coder80.Infrastructure.csproj" />
+  <Project Path="XpEng.Coder/XpEng.Coder99.Tests/XpEng.Coder90.Tests.csproj" />
+</Solution>

@@ -1,0 +1,46 @@
+﻿<Project Sdk="MSTest.Sdk/3.6.4">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseVSTest>true</UseVSTest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="XpEng.Coder80.Infrastructure\**" />
+    <Compile Remove="XpEng.Coder88.Infrastructure\**" />
+    <EmbeddedResource Remove="XpEng.Coder80.Infrastructure\**" />
+    <EmbeddedResource Remove="XpEng.Coder88.Infrastructure\**" />
+    <None Remove="XpEng.Coder80.Infrastructure\**" />
+    <None Remove="XpEng.Coder88.Infrastructure\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XpEng.Coder06.Data\XpEng.Coder06.Data.csproj" />
+    <ProjectReference Include="..\XpEng.Coder06.ViewModels\XpEng.Coder06.ViewModels.csproj" />
+    <ProjectReference Include="..\XpEng.Coder09.Models\XpEng.Coder09.Models.csproj" />
+    <ProjectReference Include="..\XpEng.Coder88.Infrastructure\XpEng.Coder80.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="MSTest.Analyzers" Version="3.*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="MSTest.TestAdapter" Version="3.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="MSTest.TestFramework" Version="3.*" />
+  </ItemGroup>
+
+</Project>

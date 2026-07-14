@@ -1,0 +1,16 @@
+﻿<Window x:Class="XpEng.Coder03.Views.MainView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:viewModels="clr-namespace:XpEng.Coder06.ViewModels;assembly=XpEng.Coder06.ViewModels"        
+        xmlns:local="clr-namespace:XpEng.Coder03.Views"
+        xmlns:views="clr-namespace:XpEng.Coder03.Views.Views"
+        DataContext="{x:Static viewModels:MainViewModel.Instance}"
+        mc:Ignorable="d"
+        Title="MainView" Height="450" Width="800">
+    <Grid>
+        <ContentControl Content="{Binding Path=DashboardViewModel}" 
+                        ContentTemplateSelector="{StaticResource GlobalTemplateLocator}" />
+    </Grid>
+</Window>
