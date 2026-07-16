@@ -1,6 +1,7 @@
-﻿using System.Windows;
+﻿using Microsoft.Win32;
+using System.Windows;
 using System.Windows.Controls;
-using Microsoft.Win32;
+using System.Windows.Input;
 using XpEng.Coder06.ViewModels;
 
 namespace XpEng.Coder03.Views.Views {
@@ -35,6 +36,22 @@ namespace XpEng.Coder03.Views.Views {
             if (result == true) {
                 if (DataContext is DashboardViewModel vm) {
                     vm.TargetDirectory = dialog.FolderName;
+                }
+            }
+        }
+
+        private void LogsListBox_KeyDown(object sender, KeyEventArgs e) {
+            // Check if the user pressed Ctrl + C
+            if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control) {
+                var listBox = sender as ListBox;
+
+                if (listBox != null && listBox.SelectedItems.Count > 0) {
+                    // Cast the selected items back to strings and join them with a line break
+                    var selectedLogs = listBox.SelectedItems.Cast<string>();
+                    string textToCopy = string.Join(Environment.NewLine, selectedLogs);
+
+                    // Push to the Windows Clipboard
+                    Clipboard.SetText(textToCopy);
                 }
             }
         }

@@ -55,7 +55,11 @@
 
         <!-- Live Logs Console -->
         <GroupBox Grid.Row="4" Header="Live Logs" FontWeight="SemiBold">
-            <ListBox ItemsSource="{Binding LiveLogs}" Margin="5" BorderThickness="0" Background="#FAFAFA" FontFamily="Consolas" FontSize="12">
+            <ListBox x:Name="LogsListBox" 
+                     ItemsSource="{Binding LiveLogs}" 
+                     SelectionMode="Extended" 
+                     KeyDown="LogsListBox_KeyDown"
+                     Margin="5" BorderThickness="0" Background="#FAFAFA" FontFamily="Consolas" FontSize="12">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <TextBlock Text="{Binding}" TextWrapping="Wrap" />
