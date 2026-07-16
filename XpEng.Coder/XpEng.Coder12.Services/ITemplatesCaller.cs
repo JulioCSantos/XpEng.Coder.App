@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 
 namespace XpEng.Coder12.Services {
-    public interface ICodeGenerator {
+    public interface ITemplatesCaller {
         // 1. Extracts the metadata from the source C# file and saves it to SyntaxMetadata.json
         // Returns the path to the generated JSON file.
         Task<string> GenerateMetadataAsync(string sourceFilePath, string targetDirectory, Action<string> logToUi);

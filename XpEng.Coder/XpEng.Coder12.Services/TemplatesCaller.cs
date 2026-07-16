@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace XpEng.Coder12.Services {
-    public class CodeGenerator : ICodeGenerator {
+    public class TemplatesCaller : ITemplatesCaller {
         public async Task ProcessFileAsync(string sourceFilePath, string templatePath, string targetDirectory, Action<string> logToUi) {
             try {
                 logToUi($"Processing {Path.GetFileName(sourceFilePath)}...");

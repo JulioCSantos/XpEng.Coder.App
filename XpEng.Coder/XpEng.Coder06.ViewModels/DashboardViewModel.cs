@@ -12,7 +12,7 @@ namespace XpEng.Coder06.ViewModels {
     // ADDED 'partial' modifier: Required by CommunityToolkit.Mvvm for [RelayCommand] to work
     public partial class DashboardViewModel : ViewModelBase, IDisposable {
 
-        private ICodeGenerator Generator => field ??= new CodeGenerator();
+        private ITemplatesCaller Generator => field ??= new TemplatesCaller();
 
         private IConfigurationService ConfigService => field ??= new JsonConfigurationService();
 

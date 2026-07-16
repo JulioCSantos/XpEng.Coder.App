@@ -10,7 +10,7 @@ namespace XpEng.Coder12.Services {
         private readonly string _sourceDirectory;
         private readonly string _targetDirectory;
         private readonly string _templatePath;
-        private readonly ICodeGenerator _generator;
+        private readonly ITemplatesCaller _generator;
         private readonly Action<string> _logAction;
 
         private FileSystemWatcher? _watcher;
@@ -19,7 +19,7 @@ namespace XpEng.Coder12.Services {
         private readonly ConcurrentDictionary<string, FileChangeEvent> _pendingChanges = new();
 
 
-        public DirectoryWatcher(string sourceDirectory, string targetDirectory, string templatePath, ICodeGenerator generator, Action<string> logAction) {
+        public DirectoryWatcher(string sourceDirectory, string targetDirectory, string templatePath, ITemplatesCaller generator, Action<string> logAction) {
             _sourceDirectory = sourceDirectory;
             _targetDirectory = targetDirectory;
             _templatePath = templatePath; // Store it here
