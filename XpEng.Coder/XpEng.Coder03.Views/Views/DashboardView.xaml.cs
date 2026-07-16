@@ -1,4 +1,5 @@
 ﻿using Microsoft.Win32;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -6,37 +7,62 @@ using XpEng.Coder06.ViewModels;
 
 namespace XpEng.Coder03.Views.Views {
     public partial class DashboardView : UserControl {
+
+        // ReSharper disable once InconsistentNaming
+        private DashboardViewModel VM => MainViewModel.Instance.DashboardViewModel;
+
         public DashboardView() {
             InitializeComponent();
         }
 
         private void BrowseSource_Click(object sender, RoutedEventArgs e) {
-            var dialog = new OpenFolderDialog {
-                Title = "Select Source Project Directory"
-            };
-
-            // Explicitly cast to bool? to handle the object return type safely
-            bool? result = dialog.ShowDialog() as bool?;
-
-            if (result == true) {
-                // Correct C# pattern matching (no more 'auto')
-                if (DataContext is DashboardViewModel vm) {
-                    vm.SourceDirectory = dialog.FolderName;
-                }
-            }
+            // Pass the current SourceDirectory to the helper
+            SelectDirectory("Select Source Project Directory", VM.SourceDirectory, path => {
+                VM.SourceDirectory = path;
+            });
         }
 
         private void BrowseTarget_Click(object sender, RoutedEventArgs e) {
-            var dialog = new OpenFolderDialog {
-                Title = "Select Target Output Directory"
+            // Pass the current TargetDirectory to the helper
+            SelectDirectory("Select Target Output Directory", VM.TargetDirectory, path => {
+                VM.TargetDirectory = path;
+            });
+        }
+
+        private void BrowseTemplate_Click(object sender, RoutedEventArgs e) {
+            var dialog = new Microsoft.Win32.OpenFileDialog {
+                Title = "Select T4 Template File",
+                Filter = "T4 Templates (*.tt)|*.tt|All Files (*.*)|*.*"
             };
 
-            bool? result = dialog.ShowDialog() as bool?;
-
-            if (result == true) {
-                if (DataContext is DashboardViewModel vm) {
-                    vm.TargetDirectory = dialog.FolderName;
+            // If we already have a path, set the dialog to open there
+            if (!string.IsNullOrWhiteSpace(VM.TemplatePath)) {
+                var directory = Path.GetDirectoryName(VM.TemplatePath);
+                if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory)) {
+                    dialog.InitialDirectory = directory;
+                    // Optionally, pre-fill the file name in the dialog box
+                    dialog.FileName = Path.GetFileName(VM.TemplatePath);
                 }
+            }
+
+            if (dialog.ShowDialog() == true) {
+                VM.TemplatePath = dialog.FileName;
+            }
+        }
+
+        // Shared Helper Method updated to accept and evaluate the current path
+        private void SelectDirectory(string title, string currentPath, System.Action<string> onFolderSelected) {
+            var dialog = new Microsoft.Win32.OpenFolderDialog {
+                Title = title
+            };
+
+            // If the path isn't empty and actually exists on the drive, set it as the starting point
+            if (!string.IsNullOrWhiteSpace(currentPath) && Directory.Exists(currentPath)) {
+                dialog.InitialDirectory = currentPath;
+            }
+
+            if (dialog.ShowDialog() == true) {
+                onFolderSelected(dialog.FolderName);
             }
         }
 

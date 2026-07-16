@@ -10,51 +10,66 @@
 
     <Grid Margin="15">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" /> <!-- Part 1: Directories & Template -->
+            <RowDefinition Height="Auto" /> <!-- Part 2: Action Buttons -->
+            <RowDefinition Height="*" /> <!-- Part 3: Live Logs -->
         </Grid.RowDefinitions>
 
-        <!-- Source Directory Input -->
-        <Grid Grid.Row="0" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="130" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="Source Directory:" VerticalAlignment="Center" FontWeight="SemiBold" />
-            <TextBox Grid.Column="1" Text="{Binding SourceDirectory, UpdateSourceTrigger=PropertyChanged}" Padding="4" />
-        </Grid>
+        <!-- ========================================== -->
+        <!-- PART 1: Directory and File Selections      -->
+        <!-- ========================================== -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,15">
 
-        <!-- Target Directory Input -->
-        <Grid Grid.Row="1" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="130" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="Target Directory:" VerticalAlignment="Center" FontWeight="SemiBold" />
-            <TextBox Grid.Column="1" Text="{Binding TargetDirectory, UpdateSourceTrigger=PropertyChanged}" Padding="4" />
-        </Grid>
+            <!-- Source Directory Input -->
+            <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="40" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Source Directory:" VerticalAlignment="Center" FontWeight="SemiBold" />
+                <TextBox Grid.Column="1" Text="{Binding SourceDirectory, UpdateSourceTrigger=PropertyChanged}" Padding="4" Margin="0,0,5,0" />
+                <Button Grid.Column="2" Content="..." Click="BrowseSource_Click" Cursor="Hand" />
+            </Grid>
 
-        <!-- Template Path Input -->
-        <Grid Grid.Row="2" Margin="0,0,0,15">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="130" />
-                <ColumnDefinition Width="*" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="Template Path:" VerticalAlignment="Center" FontWeight="SemiBold" />
-            <TextBox Grid.Column="1" Text="{Binding TemplatePath, UpdateSourceTrigger=PropertyChanged}" Padding="4" />
-        </Grid>
+            <!-- Target Directory Input -->
+            <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="40" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Target Directory:" VerticalAlignment="Center" FontWeight="SemiBold" />
+                <TextBox Grid.Column="1" Text="{Binding TargetDirectory, UpdateSourceTrigger=PropertyChanged}" Padding="4" Margin="0,0,5,0" />
+                <Button Grid.Column="2" Content="..." Click="BrowseTarget_Click" Cursor="Hand" />
+            </Grid>
 
-        <!-- Action Buttons -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,15">
+            <!-- Template Path Input -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="40" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Template Path:" VerticalAlignment="Center" FontWeight="SemiBold" />
+                <TextBox Grid.Column="1" Text="{Binding TemplatePath, UpdateSourceTrigger=PropertyChanged}" Padding="4" Margin="0,0,5,0" />
+                <Button Grid.Column="2" Content="..." Click="BrowseTemplate_Click" Cursor="Hand" />
+            </Grid>
+
+        </StackPanel>
+
+        <!-- ========================================== -->
+        <!-- PART 2: Action Buttons                     -->
+        <!-- ========================================== -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,15">
             <Button Command="{Binding ForceSyncCommand}" Content="Force Sync" Width="120" Height="30" Margin="0,0,10,0" Cursor="Hand" />
             <Button Command="{Binding ToggleWatchCommand}" Content="{Binding ToggleButtonText}" Width="120" Height="30" Cursor="Hand" />
         </StackPanel>
 
-        <!-- Live Logs Console -->
-        <GroupBox Grid.Row="4" Header="Live Logs" FontWeight="SemiBold">
+        <!-- ========================================== -->
+        <!-- PART 3: Live Logs Console                  -->
+        <!-- ========================================== -->
+        <GroupBox Grid.Row="2" Header="Live Logs" FontWeight="SemiBold">
             <ListBox x:Name="LogsListBox" 
                      ItemsSource="{Binding LiveLogs}" 
                      SelectionMode="Extended" 
@@ -67,5 +82,6 @@
                 </ListBox.ItemTemplate>
             </ListBox>
         </GroupBox>
+
     </Grid>
 </UserControl>
