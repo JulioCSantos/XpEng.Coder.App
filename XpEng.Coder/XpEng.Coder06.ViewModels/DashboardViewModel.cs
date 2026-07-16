@@ -94,15 +94,30 @@ namespace XpEng.Coder06.ViewModels {
 
         public string ToggleButtonText => IsWatching ? UIConstants.StopWatchingAction : UIConstants.StartWatchingAction;
 
-        public ObservableCollection<string> LiveLogs => field ??= InitializeLogs();
+        public ObservableCollection<LogItem> LiveLogs => field ??= InitializeLogs();
 
-        public DashboardViewModel() {
+        public event EventHandler<string> CopyToClipboardRequested;
+
+        [RelayCommand]
+        private void CopyLogs() {
+            // Because of TwoWay binding in XAML, IsSelected is already perfectly synced
+            var selectedLogs = LiveLogs
+                .Where(log => log.IsSelected)
+                .Select(log => log.Message).ToList();
+
+            if (!selectedLogs.Any()) return;
+            var textToCopy = string.Join(Environment.NewLine, selectedLogs);
+
+            // Fire the event to the view
+            CopyToClipboardRequested?.Invoke(this, textToCopy);
         }
 
-        private ObservableCollection<string> InitializeLogs() {
-            return new ObservableCollection<string>
+        public DashboardViewModel() { }
+
+        private ObservableCollection<LogItem> InitializeLogs() {
+            return new ObservableCollection<LogItem>
             {
-                $"[{DateTime.Now:HH:mm:ss}] Engine initialized. Configuration loaded."
+                new LogItem($"[{DateTime.Now:HH:mm:ss}] Engine initialized. Configuration loaded.")
             };
         }
 
@@ -158,7 +173,7 @@ namespace XpEng.Coder06.ViewModels {
 
         private void LogToUi(string message) {
             SyncContext.Post(_ => {
-                LiveLogs.Add($"[{DateTime.Now:HH:mm:ss}] {message}");
+                LiveLogs.Add(new LogItem($"[{DateTime.Now:HH:mm:ss}] {message}"));
             }, null);
         }
 

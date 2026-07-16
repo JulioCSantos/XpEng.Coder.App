@@ -9,8 +9,8 @@ public partial class MainViewModel : ObservableObject, IDisposable {
 
     protected MainViewModel() { } // Protected constructor for unit testing and to prevent external instantiation
 
-    public CounterViewModel CounterViewModel  => field ?? new CounterViewModel();
-    public DashboardViewModel DashboardViewModel => field ?? new DashboardViewModel();
+    public CounterViewModel CounterViewModel  => field ??= new CounterViewModel();
+    public DashboardViewModel DashboardViewModel => field ??= new DashboardViewModel();
 
     public void Dispose() {
         // Cascade the disposal down to the child ViewModel

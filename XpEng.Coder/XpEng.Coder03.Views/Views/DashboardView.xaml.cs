@@ -3,16 +3,21 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using XpEng.Coder06.ViewModels;
 
 namespace XpEng.Coder03.Views.Views {
     public partial class DashboardView : UserControl {
 
         // ReSharper disable once InconsistentNaming
-        private DashboardViewModel VM => MainViewModel.Instance.DashboardViewModel;
+        private readonly DashboardViewModel VM; 
 
         public DashboardView() {
             InitializeComponent();
+            VM = (this.DataContext as DashboardViewModel)!; // it is initialized in XAML, so we can safely cast here
+
+            // Listen for the ViewModel's request to touch the clipboard
+            VM.CopyToClipboardRequested += OnCopyToClipboardRequested!;
         }
 
         private void BrowseSource_Click(object sender, RoutedEventArgs e) {
@@ -66,20 +71,9 @@ namespace XpEng.Coder03.Views.Views {
             }
         }
 
-        private void LogsListBox_KeyDown(object sender, KeyEventArgs e) {
-            // Check if the user pressed Ctrl + C
-            if (e.Key == Key.C && Keyboard.Modifiers == ModifierKeys.Control) {
-                var listBox = sender as ListBox;
-
-                if (listBox != null && listBox.SelectedItems.Count > 0) {
-                    // Cast the selected items back to strings and join them with a line break
-                    var selectedLogs = listBox.SelectedItems.Cast<string>();
-                    string textToCopy = string.Join(Environment.NewLine, selectedLogs);
-
-                    // Push to the Windows Clipboard
-                    Clipboard.SetText(textToCopy);
-                }
-            }
+        private void OnCopyToClipboardRequested(object sender, string textToCopy) {
+            Clipboard.SetText(textToCopy);
         }
+
     }
 }
