@@ -9,6 +9,7 @@ namespace XpEng.Coder12.Services {
     public class DirectoryWatcher : IDisposable {
         private readonly string _sourceDirectory;
         private readonly string _targetDirectory;
+        private readonly string _templatePath;
         private readonly ICodeGenerator _generator;
         private readonly Action<string> _logAction;
 
@@ -17,9 +18,11 @@ namespace XpEng.Coder12.Services {
         private System.Timers.Timer? _debounceTimer;
         private readonly ConcurrentDictionary<string, FileChangeEvent> _pendingChanges = new();
 
-        public DirectoryWatcher(string sourceDirectory, string targetDirectory, ICodeGenerator generator, Action<string> logAction) {
+
+        public DirectoryWatcher(string sourceDirectory, string targetDirectory, string templatePath, ICodeGenerator generator, Action<string> logAction) {
             _sourceDirectory = sourceDirectory;
             _targetDirectory = targetDirectory;
+            _templatePath = templatePath; // Store it here
             _generator = generator;
             _logAction = logAction;
         }
@@ -32,7 +35,7 @@ namespace XpEng.Coder12.Services {
             _debounceTimer.Elapsed += OnTimerElapsed;
 
             _watcher = new FileSystemWatcher(_sourceDirectory) {
-                Filter = "*.cs",
+                Filter = "*.*", // Changed from "*.cs" to watch everything
                 IncludeSubdirectories = true,
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.CreationTime
             };
@@ -68,6 +71,8 @@ namespace XpEng.Coder12.Services {
         }
 
         private void OnFileChanged(object sender, FileSystemEventArgs e) {
+            if (IsTempFile(e.FullPath)) return;
+
             ChangeType changeType = e.ChangeType switch {
                 WatcherChangeTypes.Created => ChangeType.Created,
                 WatcherChangeTypes.Deleted => ChangeType.Deleted,
@@ -78,6 +83,8 @@ namespace XpEng.Coder12.Services {
         }
 
         private void OnFileRenamed(object sender, RenamedEventArgs e) {
+            if (IsTempFile(e.FullPath)) return;
+
             AddOrUpdateChange(e.FullPath, ChangeType.Renamed, e.OldFullPath);
         }
 
@@ -95,7 +102,8 @@ namespace XpEng.Coder12.Services {
             _debounceTimer?.Start();
         }
 
-        private void OnTimerElapsed(object? sender, ElapsedEventArgs e) {
+        // 1. Add the 'async' keyword here
+        private async void OnTimerElapsed(object? sender, ElapsedEventArgs e) {
             if (_pendingChanges.IsEmpty) return;
 
             var changesToProcess = new List<FileChangeEvent>();
@@ -107,8 +115,22 @@ namespace XpEng.Coder12.Services {
             }
 
             if (changesToProcess.Any()) {
-                _generator.ProcessBatch(changesToProcess, _sourceDirectory, _targetDirectory, _logAction);
+                // 2. Replace ProcessBatch with an async loop
+                foreach (var change in changesToProcess) {
+                    // Note: Adjust 'change.FilePath' if your FileChangeEvent uses 'FullPath' instead
+                    await _generator.ProcessFileAsync(change.FullPath, _templatePath, _targetDirectory, _logAction);
+                }
             }
+        }
+
+        private bool IsTempFile(string filePath) {
+            if (string.IsNullOrEmpty(filePath)) return false;
+
+            string fileName = System.IO.Path.GetFileName(filePath);
+
+            // Reject files containing ~ or ending in .tmp
+            return fileName.Contains("~") ||
+                   filePath.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase);
         }
 
         public void Dispose() {

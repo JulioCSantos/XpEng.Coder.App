@@ -2,12 +2,16 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Threading;
+using System.Threading.Tasks; // Added so 'Task' is recognized
 using System.Windows.Input;
 using XpEng.Coder12.Services;
 using XpEng.Coder80.Infrastructure.Services;
 
 namespace XpEng.Coder06.ViewModels {
-    public class DashboardViewModel : ViewModelBase, IDisposable {
+
+    // ADDED 'partial' modifier: Required by CommunityToolkit.Mvvm for [RelayCommand] to work
+    public partial class DashboardViewModel : ViewModelBase, IDisposable {
+
         private ICodeGenerator Generator => field ??= new CodeGenerator();
 
         private IConfigurationService ConfigService => field ??= new JsonConfigurationService();
@@ -16,12 +20,13 @@ namespace XpEng.Coder06.ViewModels {
 
         private DirectoryWatcher? _watcher;
 
+        private bool CanForceSync => !IsWatching && HasValidPaths;
+        private bool CanToggleWatch => HasValidPaths || IsWatching;
+
         private AppConfig CurrentConfig {
             get {
                 if (field == null) {
                     field = ConfigService.Load();
-                    // We no longer auto-inject UIConstants here. 
-                    // If the JSON is empty, the properties remain empty strings.
                 }
                 return field;
             }
@@ -91,12 +96,6 @@ namespace XpEng.Coder06.ViewModels {
 
         public ObservableCollection<string> LiveLogs => field ??= InitializeLogs();
 
-        // Commands now check HasValidPaths before allowing execution
-        public ICommand ToggleWatchCommand => field ??= new RelayCommand(ToggleWatching, () => HasValidPaths || IsWatching);
-
-        public ICommand ForceSyncCommand => field ??= new RelayCommand(ForceSync, () => !IsWatching && HasValidPaths);
-
-
         public DashboardViewModel() {
         }
 
@@ -108,9 +107,8 @@ namespace XpEng.Coder06.ViewModels {
         }
 
         private void SaveConfiguration() {
-            // Capture a local reference to safely pass into the background thread
             var configToSave = CurrentConfig;
-            System.Threading.Tasks.Task.Run(() => {
+            Task.Run(() => {
                 ConfigService.Save(configToSave);
             });
         }
@@ -127,13 +125,13 @@ namespace XpEng.Coder06.ViewModels {
         }
 
         private void NotifyCommands() {
-            // If your RelayCommand uses CommandManager.RequerySuggested, this might be redundant,
-            // but explicitly notifying the UI that command states may have changed is best practice.
-            OnPropertyChanged(nameof(ToggleWatchCommand));
-            OnPropertyChanged(nameof(ForceSyncCommand));
+            // This safely tells the generated commands to re-evaluate their CanExecute properties
+            ToggleWatchCommand?.NotifyCanExecuteChanged();
+            ForceSyncCommand?.NotifyCanExecuteChanged();
         }
 
-        private void ToggleWatching() {
+        [RelayCommand(CanExecute = nameof(CanToggleWatch))]
+        private void ToggleWatch() {
             if (IsWatching) {
                 _watcher?.Stop();
                 _watcher?.Dispose();
@@ -142,17 +140,20 @@ namespace XpEng.Coder06.ViewModels {
                 LogToUi(UIConstants.SystemOfflineMsg);
             }
             else {
-                _watcher = new DirectoryWatcher(SourceDirectory, TargetDirectory, Generator, LogToUi);
+                _watcher = new DirectoryWatcher(SourceDirectory, TargetDirectory, TemplatePath, Generator, LogToUi);
                 _watcher.Start();
                 IsWatching = true;
             }
         }
 
-        private void ForceSync() {
-            LogToUi(UIConstants.ForceSyncAction + " initiated...");
-            System.Threading.Tasks.Task.Run(() => {
-                Generator.FullSynchronization(SourceDirectory, TargetDirectory, LogToUi);
-            });
+        [RelayCommand(CanExecute = nameof(CanForceSync))]
+        private async Task ForceSync() {
+            if (!HasValidPaths) {
+                LogToUi(UIConstants.ErrorMissingPathsMsg);
+                return;
+            }
+
+            await Generator.FullSynchronizationAsync(SourceDirectory, TargetDirectory, TemplatePath, LogToUi);
         }
 
         private void LogToUi(string message) {
