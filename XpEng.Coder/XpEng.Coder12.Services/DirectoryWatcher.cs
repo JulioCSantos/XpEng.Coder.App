@@ -102,7 +102,6 @@ namespace XpEng.Coder12.Services {
             _debounceTimer?.Start();
         }
 
-        // 1. Add the 'async' keyword here
         private async void OnTimerElapsed(object? sender, ElapsedEventArgs e) {
             if (_pendingChanges.IsEmpty) return;
 
@@ -115,10 +114,23 @@ namespace XpEng.Coder12.Services {
             }
 
             if (changesToProcess.Any()) {
-                // 2. Replace ProcessBatch with an async loop
                 foreach (var change in changesToProcess) {
-                    // Note: Adjust 'change.FilePath' if your FileChangeEvent uses 'FullPath' instead
-                    await _generator.ProcessFileAsync(change.FullPath, _templatePath, _targetDirectory, _logAction);
+
+                    // Handle the special Rename rule: split into Deleted and Created
+                    if (change.ChangeType == ChangeType.Renamed && !string.IsNullOrEmpty(change.OldFullPath)) {
+                        _logAction($"Translating rename to Delete/Create for: {Path.GetFileName(change.FullPath)}");
+
+                        // 1. Delete the old file
+                        await _generator.ProcessFileAsync(change.OldFullPath, _templatePath, _targetDirectory, "Deleted", _logAction);
+
+                        // 2. Create the new file
+                        await _generator.ProcessFileAsync(change.FullPath, _templatePath, _targetDirectory, "Created", _logAction);
+                    }
+                    else {
+                        // Standard Created, Deleted, or Changed processing
+                        // Notice the 4th argument is now the string representation of the change type
+                        await _generator.ProcessFileAsync(change.FullPath, _templatePath, _targetDirectory, change.ChangeType.ToString(), _logAction);
+                    }
                 }
             }
         }
