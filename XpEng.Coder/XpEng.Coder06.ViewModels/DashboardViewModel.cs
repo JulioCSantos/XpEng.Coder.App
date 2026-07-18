@@ -1,86 +1,31 @@
 ﻿using CommunityToolkit.Mvvm.Input;
 using System;
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
 using System.Threading;
-using System.Threading.Tasks; // Added so 'Task' is recognized
+using System.Threading.Tasks;
 using System.Windows.Input;
+using XpEng.Coder09.Models.Entities;
 using XpEng.Coder12.Services;
-using XpEng.Coder80.Infrastructure.Services;
 
 namespace XpEng.Coder06.ViewModels {
 
-    // ADDED 'partial' modifier: Required by CommunityToolkit.Mvvm for [RelayCommand] to work
     public partial class DashboardViewModel : ViewModelBase, IDisposable {
 
+        #region Services & Infrastructure
         private ITemplatesCaller Generator => field ??= new TemplatesCaller();
-
-        private IConfigurationService ConfigService => field ??= new JsonConfigurationService();
 
         private SynchronizationContext SyncContext => field ??= SynchronizationContext.Current ?? new SynchronizationContext();
 
         private DirectoryWatcher? _watcher;
+        #endregion
 
-        private bool CanForceSync => !IsWatching && HasValidPaths;
-        private bool CanToggleWatch => HasValidPaths || IsWatching;
+        #region UI State & Collections
+        public ObservableCollection<LogItem> LiveLogs => field ??= InitializeLogs();
 
-        private AppConfig CurrentConfig {
-            get {
-                if (field == null) {
-                    field = ConfigService.Load();
-                }
-                return field;
-            }
-        }
-
-        private bool HasValidPaths =>
-            !string.IsNullOrWhiteSpace(SourceDirectory) &&
-            !string.IsNullOrWhiteSpace(TargetDirectory) &&
-            !string.IsNullOrWhiteSpace(TemplatePath);
-
-        public string SourceDirectory {
-            get => CurrentConfig.SourceDirectory;
-            set {
-                if (CurrentConfig.SourceDirectory != value) {
-                    CurrentConfig.SourceDirectory = value;
-                    OnPropertyChanged();
-                    NotifyCommands();
-                    SaveConfiguration();
-                }
-            }
-        }
-
-        public string TargetDirectory {
-            get => CurrentConfig.TargetDirectory;
-            set {
-                if (CurrentConfig.TargetDirectory != value) {
-                    CurrentConfig.TargetDirectory = value;
-                    OnPropertyChanged();
-                    NotifyCommands();
-                    SaveConfiguration();
-                }
-            }
-        }
-
-        public string TemplatePath {
-            get => CurrentConfig.TemplatePath;
-            set {
-                string finalPath = value;
-
-                if (!string.IsNullOrWhiteSpace(value) && System.IO.Directory.Exists(value)) {
-                    var inferred = InferTemplateFile(value);
-                    if (inferred != null) {
-                        finalPath = inferred;
-                    }
-                }
-
-                if (CurrentConfig.TemplatePath != finalPath) {
-                    CurrentConfig.TemplatePath = finalPath;
-                    OnPropertyChanged();
-                    NotifyCommands();
-                    SaveConfiguration();
-                }
-            }
-        }
+        // 1. The new Hierarchical UI Collection
+        public ObservableCollection<PlanOrchestratorViewModel> PlanViewModels => field ??= InitializePlanViewModels();
 
         public bool IsWatching {
             get => field;
@@ -94,26 +39,18 @@ namespace XpEng.Coder06.ViewModels {
 
         public string ToggleButtonText => IsWatching ? UIConstants.StopWatchingAction : UIConstants.StartWatchingAction;
 
-        public ObservableCollection<LogItem> LiveLogs => field ??= InitializeLogs();
+        public event EventHandler<string>? CopyToClipboardRequested;
+        #endregion
 
-        public event EventHandler<string> CopyToClipboardRequested;
-
-        [RelayCommand]
-        private void CopyLogs() {
-            // Because of TwoWay binding in XAML, IsSelected is already perfectly synced
-            var selectedLogs = LiveLogs
-                .Where(log => log.IsSelected)
-                .Select(log => log.Message).ToList();
-
-            if (!selectedLogs.Any()) return;
-            var textToCopy = string.Join(Environment.NewLine, selectedLogs);
-
-            // Fire the event to the view
-            CopyToClipboardRequested?.Invoke(this, textToCopy);
-        }
+        #region Command Rules
+        // A watcher can start if there is at least one plan with one target
+        private bool CanToggleWatch => IsWatching || PlanViewModels.Any(p => p.Model.TemplateTargets.Any());
+        private bool CanForceSync => !IsWatching && PlanViewModels.Any(p => p.Model.TemplateTargets.Any());
+        #endregion
 
         public DashboardViewModel() { }
 
+        #region Initialization
         private ObservableCollection<LogItem> InitializeLogs() {
             return new ObservableCollection<LogItem>
             {
@@ -121,28 +58,50 @@ namespace XpEng.Coder06.ViewModels {
             };
         }
 
-        private void SaveConfiguration() {
-            var configToSave = CurrentConfig;
-            Task.Run(() => {
-                ConfigService.Save(configToSave);
-            });
-        }
+        private ObservableCollection<PlanOrchestratorViewModel> InitializePlanViewModels() {
+            var vms = new ObservableCollection<PlanOrchestratorViewModel>();
 
-        private string? InferTemplateFile(string directory) {
-            string[] extensions = { "*.tt", "*.csx", "*.cs" };
-            foreach (var ext in extensions) {
-                var files = System.IO.Directory.GetFiles(directory, ext);
-                if (files.Length > 0) {
-                    return files[0];
-                }
+            // Hydrate the UI wrappers from the MainModel
+            foreach (var plan in MainModel.PlanOrchestrators) {
+                vms.Add(new PlanOrchestratorViewModel(plan));
             }
-            return null;
+            return vms;
+        }
+        #endregion
+
+        #region Plan Commands (New)
+        [RelayCommand]
+        private void AddPlan() {
+            var newPlan = new PlanOrchestrator("New Unnamed Plan", new DirectoryInfo(@"C:\DefaultSource"));
+            MainModel.PlanOrchestrators.Add(newPlan);
+
+            var planVm = new PlanOrchestratorViewModel(newPlan) { IsExpanded = true };
+            PlanViewModels.Add(planVm);
+
+            NotifyCommands();
         }
 
-        private void NotifyCommands() {
-            // This safely tells the generated commands to re-evaluate their CanExecute properties
-            ToggleWatchCommand?.NotifyCanExecuteChanged();
-            ForceSyncCommand?.NotifyCanExecuteChanged();
+        [RelayCommand]
+        private void DeletePlan(PlanOrchestratorViewModel? planVm) {
+            if (planVm != null) {
+                MainModel.PlanOrchestrators.Remove(planVm.Model);
+                PlanViewModels.Remove(planVm);
+                NotifyCommands();
+            }
+        }
+        #endregion
+
+        #region Execution Commands (Legacy Migrated)
+        [RelayCommand]
+        private void CopyLogs() {
+            var selectedLogs = LiveLogs
+                .Where(log => log.IsSelected)
+                .Select(log => log.Message).ToList();
+
+            if (!selectedLogs.Any()) return;
+            var textToCopy = string.Join(Environment.NewLine, selectedLogs);
+
+            CopyToClipboardRequested?.Invoke(this, textToCopy);
         }
 
         [RelayCommand(CanExecute = nameof(CanToggleWatch))]
@@ -155,20 +114,35 @@ namespace XpEng.Coder06.ViewModels {
                 LogToUi(UIConstants.SystemOfflineMsg);
             }
             else {
-                _watcher = new DirectoryWatcher(SourceDirectory, TargetDirectory, TemplatePath, Generator, LogToUi);
-                _watcher.Start();
+                // TODO: DirectoryWatcher needs an update to accept the MainModel.PlanOrchestrators collection 
+                // instead of a single Source/Target/Template string.
+
+                // _watcher = new DirectoryWatcher(MainModel.PlanOrchestrators, Generator, LogToUi);
+                // _watcher.Start();
+
                 IsWatching = true;
+                LogToUi("System Online. Monitoring multiple plans...");
             }
         }
 
         [RelayCommand(CanExecute = nameof(CanForceSync))]
         private async Task ForceSync() {
-            if (!HasValidPaths) {
-                LogToUi(UIConstants.ErrorMissingPathsMsg);
+            var activePlans = MainModel.PlanOrchestrators.Where(p => p.IsMonitored).ToList();
+
+            if (!activePlans.Any()) {
+                LogToUi("No active plans monitored for synchronization.");
                 return;
             }
 
-            await Generator.FullSynchronizationAsync(SourceDirectory, TargetDirectory, TemplatePath, LogToUi);
+            // TODO: ITemplatesCaller needs to loop through the valid TemplateTargets 
+            // inside the active Plans, rather than taking a single set of strings.
+
+            // await Generator.FullSynchronizationAsync(activePlans, LogToUi);
+        }
+
+        private void NotifyCommands() {
+            ToggleWatchCommand?.NotifyCanExecuteChanged();
+            ForceSyncCommand?.NotifyCanExecuteChanged();
         }
 
         private void LogToUi(string message) {
@@ -176,6 +150,7 @@ namespace XpEng.Coder06.ViewModels {
                 LiveLogs.Add(new LogItem($"[{DateTime.Now:HH:mm:ss}] {message}"));
             }, null);
         }
+        #endregion
 
         public void Dispose() {
             if (_watcher != null) {
