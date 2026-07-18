@@ -3,6 +3,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Text.Json.Serialization;
 using XpEng.Coder09.Models.Transport;
 
 
@@ -86,6 +87,10 @@ namespace XpEng.Coder09.Models.Entities {
         }
 
         #endregion TemplateTargets
+        [JsonIgnore]
+        [ObservableProperty]
+        private bool _isDirty;
+
         #endregion properties
 
         #region constructors
@@ -116,11 +121,14 @@ namespace XpEng.Coder09.Models.Entities {
         }
         #endregion constructors
 
-        public PlanOrchestratorPoco ToPoco() => new PlanOrchestratorPoco {
-            Id = Id.ToString(),
-            PlanName = PlanName,
-            SourceDirectory = SourceDirectory.FullName,
-            TemplateTargets = TemplateTargets.Select(t => t.ToPoco()).ToList()
-        };
+        public PlanOrchestratorPoco ToPoco() {
+            return new PlanOrchestratorPoco {
+                // Map the ID explicitly
+                Id = this.Id.ToString(),
+                PlanName = this.PlanName,
+                SourceDirectory = this.SourceDirectory.FullName,
+                TemplateTargets = new ObservableCollection<TemplateTargetPoco>(this.TemplateTargets.Select(t => t.ToPoco()))
+            };
+        }
     }
 }

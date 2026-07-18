@@ -3,173 +3,159 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             xmlns:vm="clr-namespace:XpEng.Coder06.ViewModels;assembly=XpEng.Coder06.ViewModels"
+             xmlns:viewModels="clr-namespace:XpEng.Coder06.ViewModels;assembly=XpEng.Coder06.ViewModels"
              mc:Ignorable="d"
-             DataContext="{Binding DashboardViewModel, Source={x:Static vm:MainViewModel.Instance}}"             
-             d:DesignHeight="450" d:DesignWidth="800">
+             DataContext="{Binding DashboardViewModel, Source={x:Static viewModels:MainViewModel.Instance}}"             
+             d:DesignHeight="800" d:DesignWidth="1200">
 
     <Grid Margin="15">
         <Grid.RowDefinitions>
-            <!-- Top Action Bar -->
             <RowDefinition Height="Auto"/>
-            <!-- Main Content Area -->
-            <RowDefinition Height="*"/>
+            <RowDefinition Height="2*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="1*"/>
         </Grid.RowDefinitions>
 
-        <Grid.ColumnDefinitions>
-            <!-- Left: Configurations -->
-            <ColumnDefinition Width="6*"/>
-            <!-- Right: Logs & Execution -->
-            <ColumnDefinition Width="4*"/>
-        </Grid.ColumnDefinitions>
-
-        <!-- ========================================== -->
-        <!-- HEADER / ACTION BAR                        -->
-        <!-- ========================================== -->
-        <Grid Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,0,15">
+        <!-- ACTION BAR -->
+        <Grid Grid.Row="0" Margin="0,0,0,15">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
 
-            <TextBlock Grid.Column="0" Text="Engine Dashboard" FontSize="22" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,20,0"/>
+            <TextBlock Grid.Column="0" Text="Engine Dashboard" FontSize="22" FontWeight="Bold" VerticalAlignment="Center"/>
 
-            <Button Grid.Column="1" Content="Add New Plan" Command="{Binding AddPlanCommand}" Margin="10,0,0,0" Padding="15,5" HorizontalAlignment="Left"/>
-
-            <!-- Execution Controls -->
-            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <CheckBox Content="AutoSave" IsChecked="{Binding AutoSave}" VerticalAlignment="Center" Margin="0,0,15,0" FontWeight="SemiBold"/>
+                <Button Content="Save Now" Command="{Binding SaveConfigurationCommand}" Padding="15,5" Margin="0,0,10,0"/>
                 <Button Content="{Binding ToggleButtonText}" Command="{Binding ToggleWatchCommand}" Padding="15,5" Margin="0,0,10,0" FontWeight="Bold"/>
                 <Button Content="Force Sync" Command="{Binding ForceSyncCommand}" Padding="15,5"/>
             </StackPanel>
         </Grid>
 
-        <!-- ========================================== -->
-        <!-- LEFT PANEL: PLAN ORCHESTRATORS             -->
-        <!-- ========================================== -->
-        <ScrollViewer Grid.Row="1" Grid.Column="0" Margin="0,0,15,0" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding PlanViewModels}">
+        <!-- NESTED GRIDS (MASTER-DETAIL IMPLEMENTATION) -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding UIPlans}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <!-- Expander binds to wrapper's IsExpanded -->
-                        <Expander IsExpanded="{Binding IsExpanded, Mode=TwoWay}" Margin="0,0,0,15" Background="#F4F4F5" BorderBrush="#D1D5DB" BorderThickness="1">
+                        <Border Background="#F9FAFB" BorderBrush="#D1D5DB" BorderThickness="1" Margin="0,0,15,15" Padding="10">
+                            <StackPanel>
 
-                            <!-- 1. PLAN HEADER -->
-                            <Expander.Header>
-                                <Grid HorizontalAlignment="Stretch" Width="{Binding RelativeSource={RelativeSource Mode=FindAncestor, AncestorType={x:Type Expander}}, Path=ActualWidth}">
+                                <!-- MASTER ROW: PlanOrchestrator -->
+                                <Grid Margin="0,0,0,10">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
+                                        <!-- Label -->
+                                        <ColumnDefinition Width="2*"/>
+                                        <!-- Plan Name -->
+                                        <ColumnDefinition Width="Auto"/>
+                                        <!-- Label -->
+                                        <ColumnDefinition Width="4*"/>
+                                        <!-- Source Dir -->
+                                        <ColumnDefinition Width="Auto"/>
+                                        <!-- Browse Btn -->
+                                        <ColumnDefinition Width="Auto"/>
+                                        <!-- Delete Btn -->
                                     </Grid.ColumnDefinitions>
 
-                                    <!-- CHANGED: Swapped TextBlock for an editable TextBox -->
-                                    <!-- UpdateSourceTrigger=PropertyChanged ensures the domain model updates keystroke-by-keystroke -->
-                                    <TextBox Grid.Column="0" 
-                                             Text="{Binding Model.PlanName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
-                                             FontWeight="SemiBold" 
-                                             FontSize="15" 
-                                             VerticalAlignment="Center" 
-                                             Padding="4,2"
-                                             Margin="0,0,10,0"
-                                             ToolTip="Click to rename this plan"/>
+                                    <TextBlock Grid.Column="0" Text="Plan:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                    <TextBox Grid.Column="1" Text="{Binding PlanName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
+                                             ToolTip="Plan Name" VerticalAlignment="Center" Margin="0,0,15,0" Padding="4,2"/>
 
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="0,0,40,0">
-                                        <Button Content="Add Target" Command="{Binding AddTemplateTargetCommand}" Padding="10,2" Margin="0,0,10,0"/>
-                                        <Button Content="Delete Plan" 
-                                                Command="{Binding DataContext.DeletePlanCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                                CommandParameter="{Binding}" 
-                                                Foreground="DarkRed" Padding="10,2"/>
-                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="Source Directory:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                    <TextBox Grid.Column="3" Text="{Binding SourceDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
+                                             ToolTip="Source Directory" VerticalAlignment="Center" Padding="4,2"/>
+                                    <Button Grid.Column="4" Content="..." Click="BrowseSource_Click" Padding="10,2" Margin="5,0,15,0" VerticalAlignment="Center"/>
+
+                                    <Button Grid.Column="5" Content=" ❌ " 
+                                            Command="{Binding DataContext.DeletePlanCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                            CommandParameter="{Binding}" 
+                                            Foreground="DarkRed" FontWeight="Bold" Background="Transparent" BorderThickness="0"
+                                            ToolTip="Delete Plan" VerticalAlignment="Center"/>
                                 </Grid>
-                            </Expander.Header>
 
-                            <!-- 2. PLAN CONTENT -->
-                            <Border Padding="15" Background="White">
-                                <StackPanel>
+                                <!-- DETAIL ROWS: TemplateTargets -->
+                                <!-- Indented with a white background to signify the 1-to-many relationship -->
+                                <Border Margin="40,0,0,0" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" Padding="10">
+                                    <StackPanel>
 
-                                    <!-- A. SOURCE DIRECTORY CONFIGURATION -->
-                                    <Grid Margin="0,0,0,15">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
+                                        <!-- Detail Grid Headers -->
+                                        <Grid Margin="0,0,0,5">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="30"/>
+                                                <!-- Checkbox -->
+                                                <ColumnDefinition Width="*"/>
+                                                <!-- Target Dir -->
+                                                <ColumnDefinition Width="35"/>
+                                                <!-- Browse Btn -->
+                                                <ColumnDefinition Width="15"/>
+                                                <!-- Spacer -->
+                                                <ColumnDefinition Width="*"/>
+                                                <!-- Template Path -->
+                                                <ColumnDefinition Width="35"/>
+                                                <!-- Browse Btn -->
+                                                <ColumnDefinition Width="35"/>
+                                                <!-- Delete Btn -->
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="1" Text="Target Directory" FontWeight="SemiBold" Foreground="#6B7280"/>
+                                            <TextBlock Grid.Column="4" Text="Template Path" FontWeight="SemiBold" Foreground="#6B7280"/>
+                                        </Grid>
 
-                                        <TextBlock Grid.Column="0" Text="Source Directory:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding Model.SourceDirectory.FullName}" ToolTip="{Binding Model.SourceDirectory.FullName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        <Button Grid.Column="2" Content="..." Click="BrowseSource_Click" Padding="10,2" Margin="10,0,0,0"/>
-                                    </Grid>
-
-                                    <!-- B. TEMPLATE TARGETS LIST -->
-                                    <TextBlock Text="Template Targets:" FontWeight="Bold" Margin="0,0,0,5"/>
-                                    <ItemsControl ItemsSource="{Binding Model.TemplateTargets}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Grid Margin="0,5">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-
-                                                    <!-- IsMonitored Checkbox -->
-                                                    <CheckBox Grid.Column="0" IsChecked="{Binding IsMonitored}" ToolTip="Monitor this target" VerticalAlignment="Center" Margin="0,0,10,0"/>
-
-                                                    <!-- Target Directory Grid -->
-                                                    <Grid Grid.Column="1" Margin="0,0,10,0">
+                                        <!-- Detail Grid Rows -->
+                                        <ItemsControl ItemsSource="{Binding TemplateTargets}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,3">
                                                         <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="30"/>
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="Auto"/>
-                                                        </Grid.ColumnDefinitions>
-                                                        <TextBlock Grid.Column="0" Text="{Binding TargetDirectory.FullName}" ToolTip="{Binding TargetDirectory.FullName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                                                        <Button Grid.Column="1" Content="..." Click="BrowseTarget_Click" Padding="8,2"/>
-                                                    </Grid>
-
-                                                    <!-- Template Path Grid -->
-                                                    <Grid Grid.Column="2" Margin="0,0,10,0">
-                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="15"/>
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBlock Grid.Column="0" Text="{Binding TemplatePath.FullName}" ToolTip="{Binding TemplatePath.FullName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                                                        <Button Grid.Column="1" Content="..." Click="BrowseTemplate_Click" Padding="8,2"/>
+
+                                                        <CheckBox Grid.Column="0" IsChecked="{Binding IsMonitored}" ToolTip="Monitor" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+
+                                                        <TextBox Grid.Column="1" Text="{Binding TargetDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" VerticalAlignment="Center" Padding="4,2"/>
+                                                        <Button Grid.Column="2" Content="..." Click="BrowseTarget_Click" Padding="8,2" Margin="5,0,0,0" VerticalAlignment="Center"/>
+
+                                                        <TextBox Grid.Column="4" Text="{Binding TemplatePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" VerticalAlignment="Center" Padding="4,2"/>
+                                                        <Button Grid.Column="5" Content="..." Click="BrowseTemplate_Click" Padding="8,2" Margin="5,0,0,0" VerticalAlignment="Center"/>
+
+                                                        <Button Grid.Column="6" Content=" ❌ " 
+                                                                Command="{Binding DataContext.DeleteTemplateTargetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                CommandParameter="{Binding}" 
+                                                                Foreground="DarkRed" FontWeight="Bold" Background="Transparent" BorderThickness="0" Margin="10,0,0,0"
+                                                                ToolTip="Delete Target Row" VerticalAlignment="Center"/>
                                                     </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
 
-                                                    <!-- Remove Button -->
-                                                    <Button Grid.Column="3" Content="Remove" 
-                                                            Command="{Binding DataContext.DeleteTemplateTargetCommand, RelativeSource={RelativeSource AncestorType=Expander}}" 
-                                                            CommandParameter="{Binding}" 
-                                                            Padding="10,2"/>
-                                                </Grid>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-
-                                </StackPanel>
-                            </Border>
-                        </Expander>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </Border>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
 
-        <!-- ========================================== -->
-        <!-- RIGHT PANEL: LIVE LOGS                     -->
-        <!-- ========================================== -->
-        <Grid Grid.Row="1" Grid.Column="1" Margin="5,0,0,0">
+        <!-- SPLITTER & LOGS -->
+        <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" Background="#D1D5DB" Margin="0,5,15,5" Cursor="SizeNS"/>
+
+        <Grid Grid.Row="3" Margin="0,0,15,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-
-            <Grid Grid.Row="0" Margin="0,0,0,5">
-                <TextBlock Text="System Logs" FontWeight="Bold" VerticalAlignment="Center"/>
-                <Button Content="Copy Selected" Command="{Binding CopyLogsCommand}" HorizontalAlignment="Right" Padding="10,2"/>
-            </Grid>
-
-            <!-- Logs ListBox -->
+            <TextBlock Grid.Row="0" Text="System Logs" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,0,5"/>
             <ListBox Grid.Row="1" ItemsSource="{Binding LiveLogs}" SelectionMode="Extended" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.InputBindings>
+                    <KeyBinding Key="C" Modifiers="Ctrl" Command="{Binding CopyLogsCommand}"/>
+                </ListBox.InputBindings>
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
                         <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
@@ -185,6 +171,5 @@
                 </ListBox.ItemTemplate>
             </ListBox>
         </Grid>
-
     </Grid>
 </UserControl>

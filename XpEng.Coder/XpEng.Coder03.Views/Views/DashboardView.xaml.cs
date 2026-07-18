@@ -3,13 +3,16 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using XpEng.Coder06.ViewModels;
-using XpEng.Coder09.Models.Entities;
+using XpEng.Coder09.Models.Transport;
 
 namespace XpEng.Coder03.Views.Views {
     public partial class DashboardView : UserControl {
 
+        #region Properties
         private readonly DashboardViewModel VM;
+        #endregion Properties
 
+        #region Constructors
         public DashboardView() {
             InitializeComponent();
             VM = (this.DataContext as DashboardViewModel)!;
@@ -17,34 +20,33 @@ namespace XpEng.Coder03.Views.Views {
             // Listen for the ViewModel's request to touch the clipboard
             VM.CopyToClipboardRequested += OnCopyToClipboardRequested!;
         }
+        #endregion Constructors
 
-        // Fired from inside the Expander Header (DataContext is PlanOrchestratorViewModel)
+        #region Event Handlers & Methods
         private void BrowseSource_Click(object sender, RoutedEventArgs e) {
-            if ((sender as FrameworkElement)?.DataContext is PlanOrchestratorViewModel planVm) {
-                SelectDirectory("Select Source Project Directory", planVm.Model.SourceDirectory.FullName, path => {
-                    planVm.Model.SourceDirectory = new DirectoryInfo(path);
+            if ((sender as FrameworkElement)?.DataContext is PlanOrchestratorPoco poco) {
+                SelectDirectory("Select Source Project Directory", poco.SourceDirectory, path => {
+                    poco.SourceDirectory = path;
                 });
             }
         }
 
-        // Fired from inside the TemplateTarget list (DataContext is TemplateTarget)
         private void BrowseTarget_Click(object sender, RoutedEventArgs e) {
-            if ((sender as FrameworkElement)?.DataContext is TemplateTarget target) {
-                SelectDirectory("Select Target Output Directory", target.TargetDirectory.FullName, path => {
-                    target.TargetDirectory = new DirectoryInfo(path);
+            if ((sender as FrameworkElement)?.DataContext is TemplateTargetPoco poco) {
+                SelectDirectory("Select Target Output Directory", poco.TargetDirectory, path => {
+                    poco.TargetDirectory = path;
                 });
             }
         }
 
-        // Fired from inside the TemplateTarget list (DataContext is TemplateTarget)
         private void BrowseTemplate_Click(object sender, RoutedEventArgs e) {
-            if ((sender as FrameworkElement)?.DataContext is TemplateTarget target) {
-                var dialog = new Microsoft.Win32.OpenFileDialog {
+            if ((sender as FrameworkElement)?.DataContext is TemplateTargetPoco poco) {
+                var dialog = new OpenFileDialog {
                     Title = "Select T4 Template File",
                     Filter = "T4 Templates (*.tt)|*.tt|All Files (*.*)|*.*"
                 };
 
-                string currentPath = target.TemplatePath.FullName;
+                string currentPath = poco.TemplatePath;
                 if (!string.IsNullOrWhiteSpace(currentPath)) {
                     var directory = Path.GetDirectoryName(currentPath);
                     if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory)) {
@@ -54,13 +56,13 @@ namespace XpEng.Coder03.Views.Views {
                 }
 
                 if (dialog.ShowDialog() == true) {
-                    target.TemplatePath = new FileInfo(dialog.FileName);
+                    poco.TemplatePath = dialog.FileName;
                 }
             }
         }
 
         private void SelectDirectory(string title, string currentPath, System.Action<string> onFolderSelected) {
-            var dialog = new Microsoft.Win32.OpenFolderDialog {
+            var dialog = new OpenFolderDialog {
                 Title = title
             };
 
@@ -76,5 +78,6 @@ namespace XpEng.Coder03.Views.Views {
         private void OnCopyToClipboardRequested(object sender, string textToCopy) {
             Clipboard.SetText(textToCopy);
         }
+        #endregion Event Handlers & Methods
     }
 }

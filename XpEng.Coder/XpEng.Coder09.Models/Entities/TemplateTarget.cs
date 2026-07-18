@@ -2,10 +2,13 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.Json.Serialization;
 using XpEng.Coder09.Models.Transport;
 
 namespace XpEng.Coder09.Models.Entities {
     public partial class TemplateTarget : ObservableObject {
+
+        #region properties
         public Guid Id { get; }
 
         [ObservableProperty]
@@ -17,6 +20,13 @@ namespace XpEng.Coder09.Models.Entities {
         [ObservableProperty]
         private bool _isMonitored;
 
+        [JsonIgnore]
+        [ObservableProperty]
+        private bool _isDirty;
+        #endregion properties
+
+
+        #region constructorsc
         // Primary Constructor: Enforces valid state on creation
         public TemplateTarget(DirectoryInfo targetDirectory, FileInfo templatePath, bool isMonitored = true, Guid? id = null) {
             TargetDirectory = targetDirectory ?? throw new ArgumentNullException(nameof(targetDirectory));
@@ -32,6 +42,8 @@ namespace XpEng.Coder09.Models.Entities {
             TemplatePath = new FileInfo(poco.TemplatePath);
             IsMonitored = poco.IsMonitored;
         }
+        #endregion properties
+
 
         // Export to Transport layer
         public TemplateTargetPoco ToPoco() => new TemplateTargetPoco {
