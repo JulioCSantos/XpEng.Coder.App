@@ -1,4 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
+using XpEng.Coder09.Models;
 
 namespace XpEng.Coder06.ViewModels;
 
@@ -7,7 +8,7 @@ public partial class MainViewModel : ObservableObject, IDisposable {
     private static readonly Lazy<MainViewModel> _instance = new(() => new MainViewModel());
     public static MainViewModel Instance => _instance.Value;
 
-    protected MainViewModel() { } // Protected constructor for unit testing and to prevent external instantiation
+    protected MainViewModel() { var mainModel = MainModel.Instance; } // Protected constructor for unit testing and to prevent external instantiation
 
     public CounterViewModel CounterViewModel  => field ??= new CounterViewModel();
     public DashboardViewModel DashboardViewModel => field ??= new DashboardViewModel();

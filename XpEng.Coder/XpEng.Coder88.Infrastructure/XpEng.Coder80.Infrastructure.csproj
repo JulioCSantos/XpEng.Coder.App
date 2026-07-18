@@ -20,9 +20,9 @@
 
   <ItemGroup>
     <Folder Include="Extensions\" />
-    <Folder Include="Interfaces\" />
     <Folder Include="Extensions\" />
-    <Folder Include="Interfaces\" />
+    <Folder Include="Extensions\" />
+    <Folder Include="Utilities\" />
     <Folder Include="Utilities\" />
     <Folder Include="Utilities\" />
   </ItemGroup>

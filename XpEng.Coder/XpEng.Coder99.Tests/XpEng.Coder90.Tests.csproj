@@ -9,11 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="XpEng.Coder80.Infrastructure\**" />
     <Compile Remove="XpEng.Coder88.Infrastructure\**" />
-    <EmbeddedResource Remove="XpEng.Coder80.Infrastructure\**" />
     <EmbeddedResource Remove="XpEng.Coder88.Infrastructure\**" />
-    <None Remove="XpEng.Coder80.Infrastructure\**" />
     <None Remove="XpEng.Coder88.Infrastructure\**" />
   </ItemGroup>
 
@@ -41,6 +38,10 @@
 
   <ItemGroup>
     <PackageReference Update="MSTest.TestFramework" Version="3.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="XpEng.Coder80.Infrastructure\" />
   </ItemGroup>
 
 </Project>
