@@ -1,6 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace XpEng.Coder06.ViewModels {
+namespace XpEng.Coder80.Infrastructure.Services {
     public partial class LogItem : ObservableObject {
         [ObservableProperty]
         private bool _isSelected;

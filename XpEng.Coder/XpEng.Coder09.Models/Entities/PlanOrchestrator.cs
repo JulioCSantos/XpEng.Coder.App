@@ -39,7 +39,7 @@ namespace XpEng.Coder09.Models.Entities {
         private ObservableCollection<TemplateTarget> _templateTargets;
 
         // Toolkit Method: Fires BEFORE the entire collection instance is overwritten
-        partial void OnTemplateTargetsChanging(ObservableCollection<TemplateTarget>? oldValue, ObservableCollection<TemplateTarget>? newValue) {
+        partial void OnTemplateTargetsChanging(ObservableCollection<TemplateTarget>? oldValue, ObservableCollection<TemplateTarget> newValue) {
             if (oldValue != null) {
                 oldValue.CollectionChanged -= OnTemplateTargetsCollectionChanged;
 
@@ -50,7 +50,7 @@ namespace XpEng.Coder09.Models.Entities {
         }
 
         // Toolkit Method: Fires AFTER the entire collection instance is overwritten
-        partial void OnTemplateTargetsChanged(ObservableCollection<TemplateTarget>? oldValue, ObservableCollection<TemplateTarget>? newValue) {
+        partial void OnTemplateTargetsChanged(ObservableCollection<TemplateTarget>? oldValue, ObservableCollection<TemplateTarget> newValue) {
             if (newValue != null) {
                 newValue.CollectionChanged += OnTemplateTargetsCollectionChanged;
 

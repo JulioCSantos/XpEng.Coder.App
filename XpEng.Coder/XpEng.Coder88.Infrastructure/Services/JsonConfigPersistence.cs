@@ -6,7 +6,6 @@ using XpEng.Coder80.Infrastructure.Interfaces;
 namespace XpEng.Coder80.Infrastructure.Services {
     public class JsonConfigPersistence : IConfigPersistence {
 
-        // Lazy instantiation strictly maintained
         private FileInfo? _configFile;
 
         private FileInfo ConfigFile {

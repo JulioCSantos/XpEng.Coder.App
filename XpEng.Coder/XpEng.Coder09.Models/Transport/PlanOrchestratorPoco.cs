@@ -12,30 +12,27 @@ namespace XpEng.Coder09.Models.Transport {
 
         #region Properties
         [ObservableProperty]
+        [property: JsonPropertyOrder(1)]
         private string _id = Guid.NewGuid().ToString();
 
         [ObservableProperty]
+        [property: JsonPropertyOrder(2)]
         [NotifyDataErrorInfo]
         [Required(ErrorMessage = "Plan name cannot be empty.")]
         private string _planName = string.Empty;
 
         [ObservableProperty]
+        [property: JsonPropertyOrder(3)]
         [NotifyDataErrorInfo]
         [Required(ErrorMessage = "Source directory cannot be empty.")]
         [PathSyntax]
         private string _sourceDirectory = string.Empty;
 
         #region TemplateTargets
+        [JsonPropertyOrder(4)] // Regular property syntax
         public ObservableCollection<TemplateTargetPoco> TemplateTargets {
-            get {
-                if (field == null) {
-                    field = new ObservableCollection<TemplateTargetPoco>();
-                }
-                return field;
-            }
-            set {
-                field = value;
-            }
+            get => field ??= new ObservableCollection<TemplateTargetPoco>();
+            set => field = value;
         }
         #endregion TemplateTargets
 
@@ -48,7 +45,6 @@ namespace XpEng.Coder09.Models.Transport {
         #endregion Constructors
 
         #region Event Handlers & Methods
-        // Silently checks valid state without forcing UI validation errors
         public bool IsStructurallyValid() {
             if (string.IsNullOrWhiteSpace(PlanName) || string.IsNullOrWhiteSpace(SourceDirectory) || HasErrors) {
                 return false;

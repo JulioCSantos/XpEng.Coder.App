@@ -2,10 +2,17 @@
 using System.Threading.Tasks;
 
 namespace XpEng.Coder12.Services {
+        // No Tier 09 references here
     public interface ITemplatesCaller {
-        Task ProcessFileAsync(string sourceFilePath, string templatePath, string targetDirectory, string changeType, Action<string> logToUi);
-        Task<string> GenerateMetadataAsync(string sourceFilePath, string targetDirectory, string changeType, Action<string> logToUi);
-        Task ExecuteTemplateAsync(string templatePath, string metadataFilePath, string targetDirectory, string sourceFilePath, Action<string> logToUi);
-        Task FullSynchronizationAsync(string sourceDirectory, string targetDirectory, string templatePath, Action<string> logToUi);
+
+        // Orchestration Methods
+        Task ProcessFileAsync(string planName, IEnumerable<GenerationTarget> targets, string sourceFilePath, string changeType);
+
+        Task FullSynchronizationAsync(string planName, IEnumerable<GenerationTarget> targets, string sourceDirectoryPath);
+
+        // Individual Execution Methods (Exposed for isolated Unit Testing)
+        Task<string> GenerateMetadataAsync(string planName, string sourceFilePath, string targetDirectory, string templatePath, string changeType);
+
+        Task ExecuteTemplateAsync(string templatePath, string metadataFilePath, string targetDirectory, string sourceFilePath);
     }
 }

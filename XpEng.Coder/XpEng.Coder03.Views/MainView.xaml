@@ -8,7 +8,7 @@
         xmlns:views="clr-namespace:XpEng.Coder03.Views.Views"
         DataContext="{x:Static viewModels:MainViewModel.Instance}"
         mc:Ignorable="d"
-        Title="MainView" Height="450" Width="800">
+        Title="MainView" Height="600" Width="800">
     <Grid>
         <ContentControl Content="{Binding Path=DashboardViewModel}" 
                         ContentTemplateSelector="{StaticResource GlobalTemplateLocator}" />

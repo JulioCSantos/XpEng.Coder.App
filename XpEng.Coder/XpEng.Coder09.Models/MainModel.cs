@@ -35,9 +35,6 @@ namespace XpEng.Coder09.Models {
                 _configPersistence = DIExtensions.ServiceProvider.GetRequiredService<IConfigPersistence>()
                     ?? throw new InvalidOperationException("IConfigPersistence is not registered in the DI container.");
 
-                //_configPersistence = Ioc.Default.GetService<IConfigPersistence>()
-                //                     ?? throw new InvalidOperationException("IConfigPersistence is not registered in the DI container.");
-
                 return _configPersistence;
             }
             // Optional: Setter kept for explicitly injecting mocks during highly isolated unit tests
@@ -48,7 +45,10 @@ namespace XpEng.Coder09.Models {
 
         public void SavePlans() {
             var pocos = PlanOrchestrators.Select(plan => plan.ToPoco()).ToList();
-            var options = new JsonSerializerOptions { WriteIndented = true };
+            var options = new JsonSerializerOptions {
+                WriteIndented = true,
+                IgnoreReadOnlyProperties = true // Automatically strips out HasErrors
+            };
 
             // Calls the lazy property, resolving it if it hasn't been already
             ConfigPersistence.SaveConfigJson(JsonSerializer.Serialize(pocos, options));

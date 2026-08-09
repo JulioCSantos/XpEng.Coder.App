@@ -15,13 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.*" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Extensions\" />
-    <Folder Include="Extensions\" />
-    <Folder Include="Extensions\" />
     <Folder Include="Utilities\" />
     <Folder Include="Utilities\" />
     <Folder Include="Utilities\" />
