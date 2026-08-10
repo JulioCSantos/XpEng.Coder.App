@@ -13,7 +13,7 @@ public class TemplatesCaller : ITemplatesCaller {
 
     private IEngineLogger Logger => DIExtensions.ServiceProvider.GetRequiredService<IEngineLogger>();
 
-    public async Task ProcessFileAsync(string planName, IEnumerable<GenerationTarget> targets, string sourceFilePath, string changeType) {
+    public async Task ProcessFileAsync(string planName, IEnumerable<GenerationTarget> targets, string sourceFilePath, string changeType, string? oldSourceFilePath = null) {
         try {
             var targetList = targets.ToList();
             if (!targetList.Any()) return;
@@ -27,7 +27,8 @@ public class TemplatesCaller : ITemplatesCaller {
                     sourceFilePath,
                     target.TargetDirectory,
                     target.TemplatePath, // New parameter
-                    changeType);
+                    changeType,
+                    oldSourceFilePath);
 
                 await ExecuteTemplateAsync(target.TemplatePath, metadataFilePath, target.TargetDirectory, sourceFilePath);
             }
@@ -36,8 +37,6 @@ public class TemplatesCaller : ITemplatesCaller {
             Logger.Log($"Error processing file {Path.GetFileName(sourceFilePath)}: {ex.Message}");
         }
     }
-
-    // ... (GenerateMetadataAsync and ExecuteTemplateAsync remain exactly the same as they only use strings) ...
 
     public async Task FullSynchronizationAsync(string planName, IEnumerable<GenerationTarget> targets, string sourceDirectoryPath) {
         Logger.Log($"Starting full synchronization...");
@@ -49,17 +48,17 @@ public class TemplatesCaller : ITemplatesCaller {
 
         var files = Directory.GetFiles(sourceDirectoryPath, "*.cs");
         foreach (var file in files) {
-            // FIX: Pass planName as the first argument here!
             await ProcessFileAsync(planName, targets, file, "Created");
         }
 
         Logger.Log($"Synchronization complete.");
     }
 
-    public async Task<string> GenerateMetadataAsync(string planName, string sourceFilePath, string targetDirectory, string templatePath, string changeType) {
+    public async Task<string> GenerateMetadataAsync(string planName, string sourceFilePath, string targetDirectory, string templatePath, string changeType, string? oldSourceFilePath = null) {
         string sourceCode = File.Exists(sourceFilePath) ? await File.ReadAllTextAsync(sourceFilePath) : "";
         string baseFileName = Path.GetFileNameWithoutExtension(sourceFilePath);
         string sourceDirectory = Path.GetDirectoryName(sourceFilePath) ?? string.Empty;
+        string? oldBaseFileName = string.IsNullOrWhiteSpace(oldSourceFilePath) ? null : Path.GetFileNameWithoutExtension(oldSourceFilePath);
 
         var classes = new List<object>();
 
@@ -83,6 +82,7 @@ public class TemplatesCaller : ITemplatesCaller {
             TargetDirectory = targetDirectory,
             TargetTemplate = templatePath,
             SourceFileName = baseFileName,
+            OldSourceFileName = oldBaseFileName,
             ChangeType = changeType,
             Classes = classes
         };
@@ -97,20 +97,9 @@ public class TemplatesCaller : ITemplatesCaller {
         string safePlanName = string.Join("", (planName ?? "Plan").Split(Path.GetInvalidFileNameChars()));
 
         // 2. Extract the tail of the Target Directory (up to 3 levels)
-        // FIX: Explicitly declare as nullable DirectoryInfo? so .Parent doesn't throw a compiler error
-        DirectoryInfo? dirInfo = new DirectoryInfo(targetDirectory);
-        var tailSegments = new List<string>();
-
-        for (int i = 0; i < 3 && dirInfo != null; i++) {
-            tailSegments.Insert(0, dirInfo.Name);
-            dirInfo = dirInfo.Parent;
-        }
-
-        // Join the folder names with hyphens (e.g., "Tier09-Models-Entities")
         string directoryTail = targetDirectory.GetDirectoryTail(3);
 
         // 3. Assemble the readable, unique filename delimited by underscores
-        // Format: PlanName_DirectoryTail_SourceFileName_Metadata.json
         string metadataFileName = $"{safePlanName}_{directoryTail}_{baseFileName}_Metadata.json";
         string metadataPath = Path.Combine(targetDirectory, metadataFileName);
 

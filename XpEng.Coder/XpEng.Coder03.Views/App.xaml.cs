@@ -33,10 +33,17 @@ namespace XpEng.Coder03.Views
         #endregion Configuration
 
         protected override void OnStartup(StartupEventArgs e) {
-            //Set DI factories
-            IServiceCollection servColl = DIExtensions.ServiceCollection;
-            servColl = DIConfig.Config(servColl);
-            
+
+            // App.xaml.cs OnStartup — the ENTIRE composition root sequence, in order
+            XpEng.Coder03.Views.DIConfig.Config(DIExtensions.ServiceCollection);
+            DIExtensions.Build();
+            // From this point on, DIExtensions.ServiceProvider is safe to use anywhere in the app
+
+            ////Set DI factories
+            //IServiceCollection servColl = DIExtensions.ServiceCollection;
+            //servColl = DIConfig.Config(servColl);
+            //servColl.BuildServiceProvider();
+
             // Startup MainWindow
             var mainView = DIExtensions.ServiceProvider.GetRequiredService<MainView>();
             mainView.Show();

@@ -44,6 +44,7 @@ namespace XpEng.Coder12.Services {
                     StopAndDisposeWatcher(id);
                 }
                 _watchers.Clear();
+                _lastEventTimes.Clear();
             }
         }
 
@@ -82,20 +83,18 @@ namespace XpEng.Coder12.Services {
                     Logger.Log($"[Monitoring Started] Directory: {kvp.Value.DirectoryPath} for Plan: {kvp.Value.PlanName}");
 
                     var watcher = new FileSystemWatcher(kvp.Value.DirectoryPath) {
-                        NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName |
-                                       NotifyFilters.DirectoryName | NotifyFilters.Attributes |
-                                       NotifyFilters.Size,
+                        NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName,
                         IncludeSubdirectories = true,
-                        EnableRaisingEvents = true
+                        InternalBufferSize = 65536
                     };
 
                     watcher.Changed += (s, e) => OnFileSystemEvent(kvp.Key, kvp.Value, e);
                     watcher.Created += (s, e) => OnFileSystemEvent(kvp.Key, kvp.Value, e);
                     watcher.Deleted += (s, e) => OnFileSystemEvent(kvp.Key, kvp.Value, e);
+                    watcher.Renamed += (s, e) => OnFileRenamed(kvp.Key, kvp.Value, e);
+                    watcher.Error += (s, e) => Logger.Log($"[WATCHER OVERFLOW] Plan: {kvp.Value.PlanName} | {e.GetException().Message}");
 
-                    watcher.Renamed += (s, e) => OnFileSystemEvent(kvp.Key, kvp.Value,
-                        new FileSystemEventArgs(WatcherChangeTypes.Renamed, Path.GetDirectoryName(e.FullPath)!, e.Name));
-
+                    watcher.EnableRaisingEvents = true; // enable only after all handlers are wired
                     _watchers.Add(kvp.Key, watcher);
                 }
             }
@@ -120,6 +119,25 @@ namespace XpEng.Coder12.Services {
 
             // Write to channel
             var changeEvent = new DirectoryChangedEventArgs(planId, e.Name ?? string.Empty, e.ChangeType.ToString());
+            _eventChannel.Writer.TryWrite(changeEvent);
+        }
+
+        private void OnFileRenamed(Guid planId, WatcherConfig config, RenamedEventArgs e) {
+            if (!IsRunning) return;
+
+            string fileKey = $"{e.FullPath}_Renamed";
+            DateTime now = DateTime.UtcNow;
+
+            lock (_lock) {
+                if (_lastEventTimes.TryGetValue(fileKey, out var lastTime) && (now - lastTime < _debounceThreshold))
+                    return;
+
+                _lastEventTimes[fileKey] = now;
+            }
+
+            Logger.Log($"[CAUGHT EVENT] Plan: {config.PlanName} | File: {e.OldName} -> {e.Name} | Action: Renamed");
+
+            var changeEvent = new DirectoryChangedEventArgs(planId, e.Name ?? string.Empty, "Renamed", e.OldName);
             _eventChannel.Writer.TryWrite(changeEvent);
         }
 

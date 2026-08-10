@@ -5,6 +5,7 @@ namespace XpEng.Coder06.ViewModels {
 
         public static IServiceCollection Config(IServiceCollection serviceCollection) {
             serviceCollection = Coder09.Models.DIConfig.Config(serviceCollection);
+            serviceCollection = Coder12.Services.DIConfig.Config(serviceCollection);
             serviceCollection.AddSingleton(provider => MainViewModel.Instance);
 
             return serviceCollection;

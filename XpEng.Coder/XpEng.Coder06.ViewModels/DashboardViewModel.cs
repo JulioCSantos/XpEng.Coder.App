@@ -9,7 +9,7 @@ using XpEng.Coder09.Models.Entities;
 using XpEng.Coder09.Models.Transport;
 using XpEng.Coder12.Services;
 using XpEng.Coder80.Infrastructure.Interfaces;
-using XpEng.Coder80.Infrastructure.Services; 
+using XpEng.Coder80.Infrastructure.Services;
 
 namespace XpEng.Coder06.ViewModels {
 
@@ -17,7 +17,15 @@ namespace XpEng.Coder06.ViewModels {
 
         #region Properties
         private IEngineLogger Logger => DIExtensions.ServiceProvider.GetRequiredService<IEngineLogger>();
-        private DirectoriesWatcher Watcher => new ();
+
+        #region Watcher
+        private DirectoriesWatcher? _watcher;
+        public DirectoriesWatcher Watcher {
+            get { return _watcher ??= new DirectoriesWatcher(); }
+            set => _watcher = value;
+        }
+        #endregion Watcher
+
         private CancellationTokenSource? _watchCancellationTokenSource;
         private bool _isUpdatingLayout = false;
         private bool _isInitializing = true;
@@ -276,8 +284,10 @@ namespace XpEng.Coder06.ViewModels {
                             continue;
                         }
 
+                        string? oldFilePath = string.IsNullOrEmpty(changeEvent.OldFileName) ? null : Path.Combine(affectedPlan.SourceDirectory.FullName, changeEvent.OldFileName);
+
                         var caller = DIExtensions.ServiceProvider.GetRequiredService<ITemplatesCaller>();
-                        await caller.ProcessFileAsync(affectedPlan.PlanName, activeTargets, fullFilePath, changeEvent.ChangeType);
+                        await caller.ProcessFileAsync(affectedPlan.PlanName, activeTargets, fullFilePath, changeEvent.ChangeType, oldFilePath);
                     }
                     catch (Exception ex) {
                         Logger.Log($"Processing error for '{changeEvent.FileName}': {ex.Message}");
@@ -311,6 +321,7 @@ namespace XpEng.Coder06.ViewModels {
         }
 
         public void Dispose() {
+            _watcher?.Dispose();
             _watchCancellationTokenSource?.Cancel();
             _watchCancellationTokenSource?.Dispose();
             GC.SuppressFinalize(this);
