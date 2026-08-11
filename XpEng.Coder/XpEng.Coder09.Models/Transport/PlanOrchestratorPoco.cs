@@ -4,8 +4,6 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
-using XpEng.Coder09.Models.Validation;
-using XpEng.Coder80.Infrastructure.Extensions;
 
 namespace XpEng.Coder09.Models.Transport {
 
@@ -24,29 +22,18 @@ namespace XpEng.Coder09.Models.Transport {
 
         [ObservableProperty]
         [property: JsonPropertyOrder(3)]
-        [NotifyDataErrorInfo]
-        [Required(ErrorMessage = "Source directory cannot be empty.")]
-        [PathSyntax]
-        [NotifyPropertyChangedFor(nameof(SourceDirectoryDisplay))]
-        private string _sourceDirectory = string.Empty;
+        private bool _isMonitored = true;
 
-        [JsonIgnore]
-        public string SourceDirectoryDisplay => StringExtensions.Shorten(SourceDirectory);
-
-        [ObservableProperty]
-        [property: JsonIgnore]
-        private bool _isEditingSourceDirectory;
-
-        #region TemplateTargets
+        #region SourceDirectories
         [JsonPropertyOrder(4)] // Regular property syntax
-        public ObservableCollection<TemplateTargetPoco> TemplateTargets {
-            get => field ??= new ObservableCollection<TemplateTargetPoco>();
+        public ObservableCollection<SourceDirectoryPoco> SourceDirectories {
+            get => field ??= new ObservableCollection<SourceDirectoryPoco>();
             set => field = value;
         }
-        #endregion TemplateTargets
+        #endregion SourceDirectories
 
         [JsonIgnore]
-        public bool IsEmpty => string.IsNullOrWhiteSpace(PlanName) && string.IsNullOrWhiteSpace(SourceDirectory);
+        public bool IsEmpty => string.IsNullOrWhiteSpace(PlanName) && SourceDirectories.All(s => s.IsEmpty);
         #endregion Properties
 
         #region Constructors
@@ -55,12 +42,12 @@ namespace XpEng.Coder09.Models.Transport {
 
         #region Event Handlers & Methods
         public bool IsStructurallyValid() {
-            if (string.IsNullOrWhiteSpace(PlanName) || string.IsNullOrWhiteSpace(SourceDirectory) || HasErrors) {
+            if (string.IsNullOrWhiteSpace(PlanName) || HasErrors) {
                 return false;
             }
 
-            var populatedTargets = TemplateTargets.Where(t => !t.IsEmpty).ToList();
-            if (populatedTargets.Any(t => !t.IsStructurallyValid())) {
+            var populatedSources = SourceDirectories.Where(s => !s.IsEmpty).ToList();
+            if (populatedSources.Any(s => !s.IsStructurallyValid())) {
                 return false;
             }
 

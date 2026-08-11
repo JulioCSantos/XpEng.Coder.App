@@ -38,154 +38,153 @@
             </StackPanel>
         </Grid>
 
-        <!-- NESTED GRIDS (MASTER-DETAIL IMPLEMENTATION) -->
+        <!-- PLAN TREE: Plan -> Source Directories -> Target/Template rows -->
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <ItemsControl ItemsSource="{Binding UIPlans}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
+                        <!-- PLAN LEVEL -->
                         <Border Background="#F9FAFB" BorderBrush="#D1D5DB" BorderThickness="1" Margin="0,0,15,15" Padding="10">
                             <StackPanel>
 
-                                <!-- MASTER ROW: PlanOrchestrator -->
                                 <Grid Margin="0,0,0,10">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
-                                        <!-- Label -->
                                         <ColumnDefinition Width="2*"/>
-                                        <!-- Plan Name -->
+                                        <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
-                                        <!-- Label -->
-                                        <ColumnDefinition Width="4*"/>
-                                        <!-- Source Dir -->
                                         <ColumnDefinition Width="Auto"/>
-                                        <!-- Browse Btn -->
-                                        <ColumnDefinition Width="Auto"/>
-                                        <!-- Delete Btn -->
                                     </Grid.ColumnDefinitions>
 
                                     <TextBlock Grid.Column="0" Text="Plan:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,5,0"/>
                                     <TextBox Grid.Column="1" Text="{Binding PlanName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
                                              ToolTip="Plan Name" VerticalAlignment="Center" Margin="0,0,15,0" Padding="4,2"/>
 
-                                    <TextBlock Grid.Column="2" Text="Source Directory:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                    <CheckBox Grid.Column="3" Content="Monitored" IsChecked="{Binding IsMonitored}" VerticalAlignment="Center" Margin="0,0,15,0" FontWeight="SemiBold"/>
 
-                                    <!-- Shortened-path overlay: TextBlock shows the shortened path and hides on focus,
-                                         revealing the full-path TextBox underneath for editing -->
-                                    <Grid Grid.Column="3">
-                                        <TextBox x:Name="SourceDirectoryEditBox"
-                                                 Text="{Binding SourceDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
-                                                 ToolTip="Source Directory" VerticalAlignment="Center" Padding="4,2"
-                                                 GotFocus="SourceDirectoryEditBox_GotFocus" LostFocus="SourceDirectoryEditBox_LostFocus"/>
-                                        <TextBlock Text="{Binding SourceDirectoryDisplay}"
-                                                   ToolTip="{Binding SourceDirectory}"
-                                                   Background="White"
-                                                   Padding="6,4"
-                                                   VerticalAlignment="Center"
-                                                   IsHitTestVisible="True"
-                                                   MouseLeftButtonDown="DisplayOverlay_MouseLeftButtonDown"
-                                                   Tag="{Binding ElementName=SourceDirectoryEditBox}"
-                                                   Visibility="{Binding IsEditingSourceDirectory, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Collapsed|Visible'}"/>
-                                    </Grid>
-
-                                    <Button Grid.Column="4" Content="..." Click="BrowseSource_Click" Padding="10,2" Margin="5,0,15,0" VerticalAlignment="Center"/>
-
-                                    <Button Grid.Column="5" Content=" ❌ " 
+                                    <Button Grid.Column="4" Content=" &#10060; " 
                                             Command="{Binding DataContext.DeletePlanCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
                                             CommandParameter="{Binding}" 
                                             Foreground="DarkRed" FontWeight="Bold" Background="Transparent" BorderThickness="0"
                                             ToolTip="Delete Plan" VerticalAlignment="Center"/>
                                 </Grid>
 
-                                <!-- DETAIL ROWS: TemplateTargets -->
-                                <!-- Indented with a white background to signify the 1-to-many relationship -->
-                                <Border Margin="40,0,0,0" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" Padding="10">
+                                <!-- SOURCE DIRECTORY LEVEL -->
+                                <Border Margin="30,0,0,0" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" Padding="10">
                                     <StackPanel>
+                                        <TextBlock Text="Source Directories" FontWeight="SemiBold" Foreground="#6B7280" Margin="0,0,0,6"/>
 
-                                        <!-- Detail Grid Headers -->
-                                        <Grid Margin="0,0,0,5">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="30"/>
-                                                <!-- Checkbox -->
-                                                <ColumnDefinition Width="*"/>
-                                                <!-- Target Dir -->
-                                                <ColumnDefinition Width="35"/>
-                                                <!-- Browse Btn -->
-                                                <ColumnDefinition Width="15"/>
-                                                <!-- Spacer -->
-                                                <ColumnDefinition Width="*"/>
-                                                <!-- Template Path -->
-                                                <ColumnDefinition Width="35"/>
-                                                <!-- Browse Btn -->
-                                                <ColumnDefinition Width="35"/>
-                                                <!-- Delete Btn -->
-                                            </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="1" Text="Target Directory" FontWeight="SemiBold" Foreground="#6B7280"/>
-                                            <TextBlock Grid.Column="4" Text="Template Path" FontWeight="SemiBold" Foreground="#6B7280"/>
-                                        </Grid>
-
-                                        <!-- Detail Grid Rows -->
-                                        <ItemsControl ItemsSource="{Binding TemplateTargets}">
+                                        <ItemsControl ItemsSource="{Binding SourceDirectories}">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Grid Margin="0,3">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="30"/>
-                                                            <ColumnDefinition Width="*"/>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                            <ColumnDefinition Width="15"/>
-                                                            <ColumnDefinition Width="*"/>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                        </Grid.ColumnDefinitions>
+                                                    <Border BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Padding="0,0,0,10" Margin="0,0,0,10">
+                                                        <StackPanel>
 
-                                                        <CheckBox Grid.Column="0" IsChecked="{Binding IsMonitored}" ToolTip="Monitor" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                                                            <Grid Margin="0,0,0,8">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                </Grid.ColumnDefinitions>
 
-                                                        <!-- Target Directory: shortened-path overlay -->
-                                                        <Grid Grid.Column="1">
-                                                            <TextBox x:Name="TargetDirectoryEditBox"
-                                                                     Text="{Binding TargetDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
-                                                                     VerticalAlignment="Center" Padding="4,2"
-                                                                     GotFocus="TargetDirectoryEditBox_GotFocus" LostFocus="TargetDirectoryEditBox_LostFocus"/>
-                                                            <TextBlock Text="{Binding TargetDirectoryDisplay}"
-                                                                       ToolTip="{Binding TargetDirectory}"
-                                                                       Background="White"
-                                                                       Padding="6,4"
-                                                                       VerticalAlignment="Center"
-                                                                       IsHitTestVisible="True"
-                                                                       MouseLeftButtonDown="DisplayOverlay_MouseLeftButtonDown"
-                                                                       Tag="{Binding ElementName=TargetDirectoryEditBox}"
-                                                                       Visibility="{Binding IsEditingTargetDirectory, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Collapsed|Visible'}"/>
-                                                        </Grid>
-                                                        <Button Grid.Column="2" Content="..." Click="BrowseTarget_Click" Padding="8,2" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                                <TextBlock Grid.Column="0" Text="Source:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                                <!-- SourceDirectory is exempt from shortening: full path, plain TextBox, no overlay -->
+                                                                <TextBox Grid.Column="1" Text="{Binding SourceDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
+                                                                         ToolTip="Source Directory (monitored)" VerticalAlignment="Center" Padding="4,2"/>
+                                                                <Button Grid.Column="2" Content="..." Click="BrowseSource_Click" Padding="10,2" Margin="5,0,10,0" VerticalAlignment="Center"/>
 
-                                                        <!-- Template Path: shortened-path overlay -->
-                                                        <Grid Grid.Column="4">
-                                                            <TextBox x:Name="TemplatePathEditBox"
-                                                                     Text="{Binding TemplatePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
-                                                                     VerticalAlignment="Center" Padding="4,2"
-                                                                     GotFocus="TemplatePathEditBox_GotFocus" LostFocus="TemplatePathEditBox_LostFocus"/>
-                                                            <TextBlock Text="{Binding TemplatePathDisplay}"
-                                                                       ToolTip="{Binding TemplatePath}"
-                                                                       Background="White"
-                                                                       Padding="6,4"
-                                                                       VerticalAlignment="Center"
-                                                                       IsHitTestVisible="True"
-                                                                       MouseLeftButtonDown="DisplayOverlay_MouseLeftButtonDown"
-                                                                       Tag="{Binding ElementName=TemplatePathEditBox}"
-                                                                       Visibility="{Binding IsEditingTemplatePath, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Collapsed|Visible'}"/>
-                                                        </Grid>
-                                                        <Button Grid.Column="5" Content="..." Click="BrowseTemplate_Click" Padding="8,2" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                                                <Button Grid.Column="3" Content=" &#10060; " 
+                                                                        Command="{Binding DataContext.DeleteSourceDirectoryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                        CommandParameter="{Binding}" 
+                                                                        Foreground="DarkRed" FontWeight="Bold" Background="Transparent" BorderThickness="0"
+                                                                        ToolTip="Delete Source Directory" VerticalAlignment="Center"/>
+                                                            </Grid>
 
-                                                        <Button Grid.Column="6" Content=" ❌ " 
-                                                                Command="{Binding DataContext.DeleteTemplateTargetCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                                                CommandParameter="{Binding}" 
-                                                                Foreground="DarkRed" FontWeight="Bold" Background="Transparent" BorderThickness="0" Margin="10,0,0,0"
-                                                                ToolTip="Delete Target Row" VerticalAlignment="Center"/>
-                                                    </Grid>
+                                                            <!-- TARGET/TEMPLATE LEVEL: flat rows, 2 columns -->
+                                                            <Border Margin="30,0,0,0" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1" Padding="10">
+                                                                <StackPanel>
+                                                                    <TextBlock Text="Target Directories &amp; Templates" FontWeight="SemiBold" Foreground="#6B7280" Margin="0,0,0,6"/>
+
+                                                                    <ItemsControl ItemsSource="{Binding TargetTemplates}">
+                                                                        <ItemsControl.ItemsPanel>
+                                                                            <ItemsPanelTemplate>
+                                                                                <UniformGrid Columns="2"/>
+                                                                            </ItemsPanelTemplate>
+                                                                        </ItemsControl.ItemsPanel>
+                                                                        <ItemsControl.ItemTemplate>
+                                                                            <DataTemplate>
+                                                                                <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1" Margin="0,0,8,8" Padding="8">
+                                                                                    <StackPanel>
+
+                                                                                        <Grid Margin="0,0,0,6">
+                                                                                            <Grid.ColumnDefinitions>
+                                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                                <ColumnDefinition Width="*"/>
+                                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                            </Grid.ColumnDefinitions>
+                                                                                            <CheckBox Grid.Column="0" IsChecked="{Binding IsMonitored}" ToolTip="Monitor" VerticalAlignment="Center"/>
+                                                                                            <TextBlock Grid.Column="1"/>
+                                                                                            <Button Grid.Column="2" Content=" &#10060; " 
+                                                                                                    Command="{Binding DataContext.DeleteTargetTemplateCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                                                    CommandParameter="{Binding}" 
+                                                                                                    Foreground="DarkRed" FontWeight="Bold" Background="Transparent" BorderThickness="0"
+                                                                                                    ToolTip="Delete Target/Template" VerticalAlignment="Center"/>
+                                                                                        </Grid>
+
+                                                                                        <!-- Target Directory: shortened-path overlay -->
+                                                                                        <TextBlock Text="Target Directory" FontSize="11" Foreground="#9CA3AF" Margin="0,0,0,2"/>
+                                                                                        <Grid Margin="0,0,0,6">
+                                                                                            <TextBox x:Name="TargetDirectoryEditBox"
+                                                                                                     Text="{Binding TargetDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
+                                                                                                     Padding="4,2"
+                                                                                                     GotFocus="TargetDirectoryEditBox_GotFocus" LostFocus="TargetDirectoryEditBox_LostFocus"/>
+                                                                                            <Grid>
+                                                                                                <TextBlock Text="{Binding TargetDirectoryDisplay}"
+                                                                                                           ToolTip="{Binding TargetDirectory}"
+                                                                                                           Background="White"
+                                                                                                           Padding="6,4"
+                                                                                                           IsHitTestVisible="True"
+                                                                                                           MouseLeftButtonDown="DisplayOverlay_MouseLeftButtonDown"
+                                                                                                           Tag="{Binding ElementName=TargetDirectoryEditBox}"
+                                                                                                           Visibility="{Binding IsEditingTargetDirectory, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Collapsed|Visible'}"/>
+                                                                                            </Grid>
+                                                                                        </Grid>
+                                                                                        <Button Content="Browse target..." Click="BrowseTarget_Click" HorizontalAlignment="Left" Padding="8,2" Margin="0,0,0,8" FontSize="11"/>
+
+                                                                                        <!-- Template Path: shortened-path overlay -->
+                                                                                        <TextBlock Text="Template" FontSize="11" Foreground="#9CA3AF" Margin="0,0,0,2"/>
+                                                                                        <Grid Margin="0,0,0,4">
+                                                                                            <TextBox x:Name="TemplatePathEditBox"
+                                                                                                     Text="{Binding TemplatePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
+                                                                                                     Padding="4,2"
+                                                                                                     GotFocus="TemplatePathEditBox_GotFocus" LostFocus="TemplatePathEditBox_LostFocus"/>
+                                                                                            <Grid>
+                                                                                                <TextBlock Text="{Binding TemplatePathDisplay}"
+                                                                                                           ToolTip="{Binding TemplatePath}"
+                                                                                                           Background="White"
+                                                                                                           Padding="6,4"
+                                                                                                           IsHitTestVisible="True"
+                                                                                                           MouseLeftButtonDown="DisplayOverlay_MouseLeftButtonDown"
+                                                                                                           Tag="{Binding ElementName=TemplatePathEditBox}"
+                                                                                                           Visibility="{Binding IsEditingTemplatePath, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Collapsed|Visible'}"/>
+                                                                                            </Grid>
+                                                                                        </Grid>
+                                                                                        <Button Content="Browse template..." Click="BrowseTemplate_Click" HorizontalAlignment="Left" Padding="8,2" FontSize="11"/>
+
+                                                                                    </StackPanel>
+                                                                                </Border>
+                                                                            </DataTemplate>
+                                                                        </ItemsControl.ItemTemplate>
+                                                                    </ItemsControl>
+                                                                </StackPanel>
+                                                            </Border>
+
+                                                        </StackPanel>
+                                                    </Border>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
-
                                     </StackPanel>
                                 </Border>
                             </StackPanel>

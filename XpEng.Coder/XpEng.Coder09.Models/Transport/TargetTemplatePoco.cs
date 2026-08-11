@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using System.IO;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using XpEng.Coder09.Models.Validation;
@@ -7,7 +8,7 @@ using XpEng.Coder80.Infrastructure.Extensions;
 
 namespace XpEng.Coder09.Models.Transport {
 
-    public partial class TemplateTargetPoco : ObservableValidator {
+    public partial class TargetTemplatePoco : ObservableValidator {
 
         #region Properties
         [ObservableProperty]
@@ -26,34 +27,38 @@ namespace XpEng.Coder09.Models.Transport {
         public string TargetDirectoryDisplay => StringExtensions.Shorten(TargetDirectory);
 
         [ObservableProperty]
-        [property: JsonIgnore]
-        private bool _isEditingTargetDirectory;
-
-        [ObservableProperty]
         [property: JsonPropertyOrder(3)]
         [NotifyDataErrorInfo]
         [Required(ErrorMessage = "Template path cannot be empty.")]
         [PathSyntax]
         [NotifyPropertyChangedFor(nameof(TemplatePathDisplay))]
+        [NotifyPropertyChangedFor(nameof(Name))]
         private string _templatePath = string.Empty;
 
         [JsonIgnore]
         public string TemplatePathDisplay => StringExtensions.Shorten(TemplatePath);
 
-        [ObservableProperty]
-        [property: JsonIgnore]
-        private bool _isEditingTemplatePath;
+        [JsonIgnore]
+        public string Name => Path.GetFileName(TemplatePath);
 
         [ObservableProperty]
         [property: JsonPropertyOrder(4)]
         private bool _isMonitored = false;
+
+        [ObservableProperty]
+        [property: JsonIgnore]
+        private bool _isEditingTargetDirectory;
+
+        [ObservableProperty]
+        [property: JsonIgnore]
+        private bool _isEditingTemplatePath;
 
         [JsonIgnore]
         public bool IsEmpty => string.IsNullOrWhiteSpace(TargetDirectory) && string.IsNullOrWhiteSpace(TemplatePath);
         #endregion Properties
 
         #region Constructors
-        public TemplateTargetPoco() { }
+        public TargetTemplatePoco() { }
         #endregion Constructors
 
         #region Event Handlers & Methods

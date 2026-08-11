@@ -20,9 +20,16 @@ namespace XpEng.Coder06.ViewModels {
 
         #region Watcher
         private DirectoriesWatcher? _watcher;
+        private readonly Lock _watcherLock = new();
         public DirectoriesWatcher Watcher {
-            get { return _watcher ??= new DirectoriesWatcher(); }
-            set => _watcher = value;
+            get {
+                if (_watcher != null) return _watcher;
+                lock (_watcherLock) {
+                    _watcher ??= new DirectoriesWatcher();
+                }
+                return _watcher;
+            }
+            set { lock (_watcherLock) { _watcher = value; } }
         }
         #endregion Watcher
 
@@ -59,26 +66,73 @@ namespace XpEng.Coder06.ViewModels {
             if (e.NewItems != null) {
                 foreach (PlanOrchestratorPoco poco in e.NewItems) {
                     poco.PropertyChanged += Poco_PropertyChanged;
-                    poco.TemplateTargets.CollectionChanged += OnTargetsChanged;
+                    WireSourceDirectories(poco);
                 }
             }
             if (e.OldItems != null) {
                 foreach (PlanOrchestratorPoco poco in e.OldItems) {
                     poco.PropertyChanged -= Poco_PropertyChanged;
-                    poco.TemplateTargets.CollectionChanged -= OnTargetsChanged;
+                    UnwireSourceDirectories(poco);
                 }
             }
             TriggerAutoSave();
         }
 
-        private void OnTargetsChanged(object? sender, NotifyCollectionChangedEventArgs e) {
+        private void WireSourceDirectories(PlanOrchestratorPoco plan) {
+            plan.SourceDirectories.CollectionChanged += OnSourceDirectoriesChanged;
+            foreach (SourceDirectoryPoco source in plan.SourceDirectories) {
+                source.PropertyChanged += Poco_PropertyChanged;
+                WireTargetTemplates(source);
+            }
+        }
+
+        private void UnwireSourceDirectories(PlanOrchestratorPoco plan) {
+            plan.SourceDirectories.CollectionChanged -= OnSourceDirectoriesChanged;
+            foreach (SourceDirectoryPoco source in plan.SourceDirectories) {
+                source.PropertyChanged -= Poco_PropertyChanged;
+                UnwireTargetTemplates(source);
+            }
+        }
+
+        private void OnSourceDirectoriesChanged(object? sender, NotifyCollectionChangedEventArgs e) {
             if (e.NewItems != null) {
-                foreach (TemplateTargetPoco poco in e.NewItems) {
+                foreach (SourceDirectoryPoco poco in e.NewItems) {
+                    poco.PropertyChanged += Poco_PropertyChanged;
+                    WireTargetTemplates(poco);
+                }
+            }
+            if (e.OldItems != null) {
+                foreach (SourceDirectoryPoco poco in e.OldItems) {
+                    poco.PropertyChanged -= Poco_PropertyChanged;
+                    UnwireTargetTemplates(poco);
+                }
+            }
+            EnsureBlankRows();
+            TriggerAutoSave();
+        }
+
+        private void WireTargetTemplates(SourceDirectoryPoco source) {
+            source.TargetTemplates.CollectionChanged += OnTargetTemplatesChanged;
+            foreach (TargetTemplatePoco target in source.TargetTemplates) {
+                target.PropertyChanged += Poco_PropertyChanged;
+            }
+        }
+
+        private void UnwireTargetTemplates(SourceDirectoryPoco source) {
+            source.TargetTemplates.CollectionChanged -= OnTargetTemplatesChanged;
+            foreach (TargetTemplatePoco target in source.TargetTemplates) {
+                target.PropertyChanged -= Poco_PropertyChanged;
+            }
+        }
+
+        private void OnTargetTemplatesChanged(object? sender, NotifyCollectionChangedEventArgs e) {
+            if (e.NewItems != null) {
+                foreach (TargetTemplatePoco poco in e.NewItems) {
                     poco.PropertyChanged += Poco_PropertyChanged;
                 }
             }
             if (e.OldItems != null) {
-                foreach (TemplateTargetPoco poco in e.OldItems) {
+                foreach (TargetTemplatePoco poco in e.OldItems) {
                     poco.PropertyChanged -= Poco_PropertyChanged;
                 }
             }
@@ -92,8 +146,8 @@ namespace XpEng.Coder06.ViewModels {
         }
         #endregion UIPlans
 
-        private bool CanToggleWatch => IsWatching || UIPlans.Any(p => p.TemplateTargets.Any(t => !t.IsEmpty));
-        private bool CanForceSync => !IsWatching && UIPlans.Any(p => p.TemplateTargets.Any(t => !t.IsEmpty));
+        private bool CanToggleWatch => IsWatching || UIPlans.Any(p => p.SourceDirectories.Any(s => s.TargetTemplates.Any(t => !t.IsEmpty)));
+        private bool CanForceSync => !IsWatching && UIPlans.Any(p => p.SourceDirectories.Any(s => s.TargetTemplates.Any(t => !t.IsEmpty)));
 
         public event EventHandler<string>? CopyToClipboardRequested;
         #endregion Properties
@@ -125,8 +179,14 @@ namespace XpEng.Coder06.ViewModels {
             }
 
             foreach (var plan in UIPlans) {
-                if (!plan.TemplateTargets.Any() || !plan.TemplateTargets.Last().IsEmpty) {
-                    plan.TemplateTargets.Add(new TemplateTargetPoco());
+                if (!plan.SourceDirectories.Any() || !plan.SourceDirectories.Last().IsEmpty) {
+                    plan.SourceDirectories.Add(new SourceDirectoryPoco());
+                }
+
+                foreach (var source in plan.SourceDirectories) {
+                    if (!source.TargetTemplates.Any() || !source.TargetTemplates.Last().IsEmpty) {
+                        source.TargetTemplates.Add(new TargetTemplatePoco());
+                    }
                 }
             }
 
@@ -143,10 +203,20 @@ namespace XpEng.Coder06.ViewModels {
         }
 
         [RelayCommand]
-        private void DeleteTemplateTarget(TemplateTargetPoco? targetPoco) {
+        private void DeleteSourceDirectory(SourceDirectoryPoco? sourcePoco) {
+            if (sourcePoco != null && !sourcePoco.IsEmpty) {
+                var parentPlan = UIPlans.FirstOrDefault(p => p.SourceDirectories.Contains(sourcePoco));
+                parentPlan?.SourceDirectories.Remove(sourcePoco);
+                EnsureBlankRows();
+                TriggerAutoSave();
+            }
+        }
+
+        [RelayCommand]
+        private void DeleteTargetTemplate(TargetTemplatePoco? targetPoco) {
             if (targetPoco != null && !targetPoco.IsEmpty) {
-                var parentPlan = UIPlans.FirstOrDefault(p => p.TemplateTargets.Contains(targetPoco));
-                parentPlan?.TemplateTargets.Remove(targetPoco);
+                var parentSource = UIPlans.SelectMany(p => p.SourceDirectories).FirstOrDefault(s => s.TargetTemplates.Contains(targetPoco));
+                parentSource?.TargetTemplates.Remove(targetPoco);
                 EnsureBlankRows();
                 TriggerAutoSave();
             }
@@ -165,7 +235,17 @@ namespace XpEng.Coder06.ViewModels {
         private void SaveConfigurationInternal(bool isAutoSave) {
             var plansToSave = UIPlans.Where(p => !p.IsEmpty).ToList();
 
-            // 1. Enforce Uniqueness
+            // 1. Enforce structural validity first, so a Plan with a blank name (which fails
+            // [Required] on PlanName) is reported as "name required" rather than surfacing
+            // as a confusing duplicate-name collision further down.
+            if (plansToSave.Any(p => !p.IsStructurallyValid())) {
+                if (!isAutoSave) {
+                    Logger.Log("Save failed: One or more plans are not structurally valid (check required fields).");
+                }
+                return;
+            }
+
+            // 2. Enforce Uniqueness
             var duplicateNames = plansToSave
                 .GroupBy(p => p.PlanName?.Trim().ToLowerInvariant())
                 .Where(g => g.Count() > 1)
@@ -174,20 +254,24 @@ namespace XpEng.Coder06.ViewModels {
 
             if (duplicateNames.Any()) {
                 if (!isAutoSave) {
-                    Logger.Log($"Save failed: Plan names must be unique. Duplicates found: {string.Join(", ", duplicateNames)}");
+                    var displayNames = duplicateNames.Select(n => string.IsNullOrEmpty(n) ? "(blank)" : n);
+                    Logger.Log($"Save failed: Plan names must be unique. Duplicates found: {string.Join(", ", displayNames)}");
                 }
                 return; // Abort the save
             }
-
-            if (plansToSave.Any(p => !p.IsStructurallyValid())) return;
 
             var newDomainModels = new System.Collections.Generic.List<PlanOrchestrator>();
             foreach (var poco in plansToSave) {
                 var cleanPoco = new PlanOrchestratorPoco {
                     Id = poco.Id,
                     PlanName = poco.PlanName,
-                    SourceDirectory = poco.SourceDirectory,
-                    TemplateTargets = new ObservableCollection<TemplateTargetPoco>(poco.TemplateTargets.Where(t => !t.IsEmpty))
+                    IsMonitored = poco.IsMonitored,
+                    SourceDirectories = new ObservableCollection<SourceDirectoryPoco>(
+                        poco.SourceDirectories.Where(s => !s.IsEmpty).Select(s => new SourceDirectoryPoco {
+                            Id = s.Id,
+                            SourceDirectory = s.SourceDirectory,
+                            TargetTemplates = new ObservableCollection<TargetTemplatePoco>(s.TargetTemplates.Where(t => !t.IsEmpty))
+                        }))
                 };
 
                 try {
@@ -216,12 +300,14 @@ namespace XpEng.Coder06.ViewModels {
 
         private Dictionary<Guid, WatcherConfig> GetCurrentWatcherConfig() {
             // TIER BRIDGE: Extract pure primitives so Tier 12 knows nothing about Tier 09 Models
+            // Keyed by SourceDirectory.Id (not Plan.Id): each Source Directory gets its own
+            // FileSystemWatcher, since a Plan may now own multiple Source Directories.
             return MainModel.Instance.PlanOrchestrators
-                .Where(p => p.SourceDirectory != null && p.SourceDirectory.Exists && p.TemplateTargets.Any(t => t.IsMonitored))
-                .ToDictionary(
-                    p => p.Id,
-                    p => new WatcherConfig(p.SourceDirectory!.FullName, p.PlanName ?? "Unknown Plan")
-                );
+                .Where(p => p.IsMonitored)
+                .SelectMany(p => p.SourceDirectories
+                    .Where(s => s.SourcePath != null && s.SourcePath.Exists && s.TargetTemplates.Any(t => t.IsMonitored))
+                    .Select(s => new { s.Id, Config = new WatcherConfig(s.SourcePath.FullName, p.PlanName ?? "Unknown Plan") }))
+                .ToDictionary(x => x.Id, x => x.Config);
         }
 
         [RelayCommand(CanExecute = nameof(CanToggleWatch))]
@@ -250,6 +336,16 @@ namespace XpEng.Coder06.ViewModels {
             }
         }
 
+        // Finds which Plan owns the Source Directory that raised the watcher event,
+        // since a Source Directory's Id (not a Plan's Id) is now the watcher key.
+        private (PlanOrchestrator? Plan, SourceDirectory? Source) FindSourceDirectory(Guid watcherId) {
+            foreach (var plan in MainModel.Instance.PlanOrchestrators) {
+                var source = plan.SourceDirectories.FirstOrDefault(s => s.Id == watcherId);
+                if (source != null) return (plan, source);
+            }
+            return (null, null);
+        }
+
         private async Task ConsumeWatcherEventsAsync(CancellationToken token) {
             try {
                 await foreach (var changeEvent in Watcher.ReadEventsAsync(token)) {
@@ -257,26 +353,20 @@ namespace XpEng.Coder06.ViewModels {
                         // 1. ABSOLUTE TOP: Log the raw event the microsecond it hits the channel
                         Logger.Log($"Raw Event: [{changeEvent.ChangeType}] {changeEvent.FileName} (WatcherID: {changeEvent.WatcherId})");
 
-                        var affectedPlan = MainModel.Instance.PlanOrchestrators
-                            .FirstOrDefault(p => p.Id == changeEvent.WatcherId);
+                        var (affectedPlan, affectedSource) = FindSourceDirectory(changeEvent.WatcherId);
 
                         // 2. Expose the mismatch!
-                        if (affectedPlan == null) {
-                            Logger.Log($"WARNING: WatcherId {changeEvent.WatcherId} does not match any active Plan Orchestrator ID!");
+                        if (affectedPlan == null || affectedSource == null) {
+                            Logger.Log($"WARNING: WatcherId {changeEvent.WatcherId} does not match any active Source Directory!");
                             continue;
                         }
 
-                        if (affectedPlan.SourceDirectory == null) {
-                            Logger.Log($"Error: Source directory is null for plan '{affectedPlan.PlanName}'.");
-                            continue;
-                        }
+                        string fullFilePath = Path.Combine(affectedSource.SourcePath.FullName, changeEvent.FileName ?? string.Empty);
 
-                        string fullFilePath = Path.Combine(affectedPlan.SourceDirectory.FullName, changeEvent.FileName ?? string.Empty);
-
-                        // 3. STRICT NULL CHECKS: Prevents empty UI rows from crashing the loop
-                        var activeTargets = affectedPlan.TemplateTargets
-                            .Where(t => t.IsMonitored && t.TemplatePath != null && t.TargetDirectory != null)
-                            .Select(t => new GenerationTarget(t.TemplatePath!.FullName, t.TargetDirectory!.FullName))
+                        // 3. STRICT FILTER: only actively-monitored target/template pairs
+                        var activeTargets = affectedSource.TargetTemplates
+                            .Where(t => t.IsMonitored)
+                            .Select(t => new GenerationTarget(t.TemplatePath.FullName, t.TargetDirectory.FullName))
                             .ToList();
 
                         if (!activeTargets.Any()) {
@@ -284,7 +374,7 @@ namespace XpEng.Coder06.ViewModels {
                             continue;
                         }
 
-                        string? oldFilePath = string.IsNullOrEmpty(changeEvent.OldFileName) ? null : Path.Combine(affectedPlan.SourceDirectory.FullName, changeEvent.OldFileName);
+                        string? oldFilePath = string.IsNullOrEmpty(changeEvent.OldFileName) ? null : Path.Combine(affectedSource.SourcePath.FullName, changeEvent.OldFileName);
 
                         var caller = DIExtensions.ServiceProvider.GetRequiredService<ITemplatesCaller>();
                         await caller.ProcessFileAsync(affectedPlan.PlanName, activeTargets, fullFilePath, changeEvent.ChangeType, oldFilePath);

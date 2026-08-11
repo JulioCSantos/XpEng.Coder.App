@@ -5,10 +5,10 @@ using XpEng.Coder09.Models.Entities;
 
 namespace XpEng.Coder90.Tests.XpEng.Coder09.Models {
     [TestClass]
-    public class TemplateTargetTests {
+    public class TargetTemplateTests {
         [TestMethod]
-        public void TemplateTargetInstantiationTest() {
-            var actual = new TemplateTarget(new DirectoryInfo("C:\\"), new FileInfo("C:\\swapfile.sys"), false);
+        public void TargetTemplateInstantiationTest() {
+            var actual = new TargetTemplate(new DirectoryInfo("C:\\"), new FileInfo("C:\\swapfile.sys"), false);
             Assert.IsNotNull(actual);
             Assert.IsNotNull(actual.TargetDirectory);
         }

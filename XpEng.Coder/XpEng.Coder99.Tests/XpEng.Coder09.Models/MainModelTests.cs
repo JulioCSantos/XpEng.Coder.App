@@ -3,7 +3,8 @@ using XpEng.Coder09.Models;
 using XpEng.Coder09.Models.Entities;
 using XpEng.Coder80.Infrastructure.Services;
 
-namespace XpEng.Coder90.Tests.XpEng.Coder09.Models; 
+namespace XpEng.Coder90.Tests.XpEng.Coder09.Models;
+
 [TestClass]
 public class MainModelTests {
     [TestInitialize]
@@ -25,11 +26,13 @@ public class MainModelTests {
         var model = MainModel.Instance;
         model.PlanOrchestrators.Clear();
 
-        var originalPlan = new PlanOrchestrator("Persist Test", new DirectoryInfo(@"C:\Data"));
-        originalPlan.TemplateTargets.Add(new TemplateTarget(
+        var originalPlan = new PlanOrchestrator("Persist Test");
+        var originalSource = new SourceDirectory(new DirectoryInfo(@"C:\Data"));
+        originalSource.TargetTemplates.Add(new TargetTemplate(
             new DirectoryInfo(@"C:\Out"),
             new FileInfo(@"C:\Template.tt"),
             false));
+        originalPlan.SourceDirectories.Add(originalSource);
 
         model.PlanOrchestrators.Add(originalPlan);
 
@@ -43,8 +46,11 @@ public class MainModelTests {
 
         var loadedPlan = model.PlanOrchestrators.First();
         Assert.AreEqual("Persist Test", loadedPlan.PlanName);
-        Assert.AreEqual(1, loadedPlan.TemplateTargets.Count);
-        Assert.IsFalse(loadedPlan.TemplateTargets.First().IsMonitored);
+        Assert.AreEqual(1, loadedPlan.SourceDirectories.Count);
+
+        var loadedSource = loadedPlan.SourceDirectories.First();
+        Assert.AreEqual(1, loadedSource.TargetTemplates.Count);
+        Assert.IsFalse(loadedSource.TargetTemplates.First().IsMonitored);
     }
 
 }
