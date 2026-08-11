@@ -1,12 +1,17 @@
-﻿<UserControl x:Class="XpEng.Coder03.Views.Views.DashboardView"
+<UserControl x:Class="XpEng.Coder03.Views.Views.DashboardView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModels="clr-namespace:XpEng.Coder06.ViewModels;assembly=XpEng.Coder06.ViewModels"
+             xmlns:converters="clr-namespace:XpEng.Coder03.Views.Converters"
              mc:Ignorable="d"
              DataContext="{Binding DashboardViewModel, Source={x:Static viewModels:MainViewModel.Instance}}"             
              d:DesignHeight="800" d:DesignWidth="1200">
+
+    <UserControl.Resources>
+        <converters:BooleanToStringConverter x:Key="BoolToStringConverter"/>
+    </UserControl.Resources>
 
     <Grid Margin="15">
         <Grid.RowDefinitions>
@@ -63,8 +68,25 @@
                                              ToolTip="Plan Name" VerticalAlignment="Center" Margin="0,0,15,0" Padding="4,2"/>
 
                                     <TextBlock Grid.Column="2" Text="Source Directory:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,5,0"/>
-                                    <TextBox Grid.Column="3" Text="{Binding SourceDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
-                                             ToolTip="Source Directory" VerticalAlignment="Center" Padding="4,2"/>
+
+                                    <!-- Shortened-path overlay: TextBlock shows the shortened path and hides on focus,
+                                         revealing the full-path TextBox underneath for editing -->
+                                    <Grid Grid.Column="3">
+                                        <TextBox x:Name="SourceDirectoryEditBox"
+                                                 Text="{Binding SourceDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
+                                                 ToolTip="Source Directory" VerticalAlignment="Center" Padding="4,2"
+                                                 GotFocus="SourceDirectoryEditBox_GotFocus" LostFocus="SourceDirectoryEditBox_LostFocus"/>
+                                        <TextBlock Text="{Binding SourceDirectoryDisplay}"
+                                                   ToolTip="{Binding SourceDirectory}"
+                                                   Background="White"
+                                                   Padding="6,4"
+                                                   VerticalAlignment="Center"
+                                                   IsHitTestVisible="True"
+                                                   MouseLeftButtonDown="DisplayOverlay_MouseLeftButtonDown"
+                                                   Tag="{Binding ElementName=SourceDirectoryEditBox}"
+                                                   Visibility="{Binding IsEditingSourceDirectory, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Collapsed|Visible'}"/>
+                                    </Grid>
+
                                     <Button Grid.Column="4" Content="..." Click="BrowseSource_Click" Padding="10,2" Margin="5,0,15,0" VerticalAlignment="Center"/>
 
                                     <Button Grid.Column="5" Content=" ❌ " 
@@ -118,10 +140,40 @@
 
                                                         <CheckBox Grid.Column="0" IsChecked="{Binding IsMonitored}" ToolTip="Monitor" HorizontalAlignment="Left" VerticalAlignment="Center"/>
 
-                                                        <TextBox Grid.Column="1" Text="{Binding TargetDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" VerticalAlignment="Center" Padding="4,2"/>
+                                                        <!-- Target Directory: shortened-path overlay -->
+                                                        <Grid Grid.Column="1">
+                                                            <TextBox x:Name="TargetDirectoryEditBox"
+                                                                     Text="{Binding TargetDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
+                                                                     VerticalAlignment="Center" Padding="4,2"
+                                                                     GotFocus="TargetDirectoryEditBox_GotFocus" LostFocus="TargetDirectoryEditBox_LostFocus"/>
+                                                            <TextBlock Text="{Binding TargetDirectoryDisplay}"
+                                                                       ToolTip="{Binding TargetDirectory}"
+                                                                       Background="White"
+                                                                       Padding="6,4"
+                                                                       VerticalAlignment="Center"
+                                                                       IsHitTestVisible="True"
+                                                                       MouseLeftButtonDown="DisplayOverlay_MouseLeftButtonDown"
+                                                                       Tag="{Binding ElementName=TargetDirectoryEditBox}"
+                                                                       Visibility="{Binding IsEditingTargetDirectory, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Collapsed|Visible'}"/>
+                                                        </Grid>
                                                         <Button Grid.Column="2" Content="..." Click="BrowseTarget_Click" Padding="8,2" Margin="5,0,0,0" VerticalAlignment="Center"/>
 
-                                                        <TextBox Grid.Column="4" Text="{Binding TemplatePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" VerticalAlignment="Center" Padding="4,2"/>
+                                                        <!-- Template Path: shortened-path overlay -->
+                                                        <Grid Grid.Column="4">
+                                                            <TextBox x:Name="TemplatePathEditBox"
+                                                                     Text="{Binding TemplatePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
+                                                                     VerticalAlignment="Center" Padding="4,2"
+                                                                     GotFocus="TemplatePathEditBox_GotFocus" LostFocus="TemplatePathEditBox_LostFocus"/>
+                                                            <TextBlock Text="{Binding TemplatePathDisplay}"
+                                                                       ToolTip="{Binding TemplatePath}"
+                                                                       Background="White"
+                                                                       Padding="6,4"
+                                                                       VerticalAlignment="Center"
+                                                                       IsHitTestVisible="True"
+                                                                       MouseLeftButtonDown="DisplayOverlay_MouseLeftButtonDown"
+                                                                       Tag="{Binding ElementName=TemplatePathEditBox}"
+                                                                       Visibility="{Binding IsEditingTemplatePath, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Collapsed|Visible'}"/>
+                                                        </Grid>
                                                         <Button Grid.Column="5" Content="..." Click="BrowseTemplate_Click" Padding="8,2" Margin="5,0,0,0" VerticalAlignment="Center"/>
 
                                                         <Button Grid.Column="6" Content=" ❌ " 

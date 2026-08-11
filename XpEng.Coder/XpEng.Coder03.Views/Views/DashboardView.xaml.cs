@@ -2,6 +2,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using XpEng.Coder06.ViewModels;
 using XpEng.Coder09.Models.Transport;
 
@@ -73,6 +74,41 @@ namespace XpEng.Coder03.Views.Views {
             if (dialog.ShowDialog() == true) {
                 onFolderSelected(dialog.FolderName);
             }
+        }
+
+        // Clicking the shortened-path overlay forwards focus to the real, full-path TextBox
+        // underneath it. GotFocus/LostFocus below (not this handler) set the poco's IsEditing*
+        // flag, so the flag reflects actual keyboard focus regardless of how it was reached.
+        private void DisplayOverlay_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {
+            if (sender is FrameworkElement fe && fe.Tag is TextBox editBox) {
+                editBox.Focus();
+                Keyboard.Focus(editBox);
+                editBox.CaretIndex = editBox.Text?.Length ?? 0;
+            }
+        }
+
+        private void SourceDirectoryEditBox_GotFocus(object sender, RoutedEventArgs e) {
+            if ((sender as FrameworkElement)?.DataContext is PlanOrchestratorPoco poco) poco.IsEditingSourceDirectory = true;
+        }
+
+        private void SourceDirectoryEditBox_LostFocus(object sender, RoutedEventArgs e) {
+            if ((sender as FrameworkElement)?.DataContext is PlanOrchestratorPoco poco) poco.IsEditingSourceDirectory = false;
+        }
+
+        private void TargetDirectoryEditBox_GotFocus(object sender, RoutedEventArgs e) {
+            if ((sender as FrameworkElement)?.DataContext is TemplateTargetPoco poco) poco.IsEditingTargetDirectory = true;
+        }
+
+        private void TargetDirectoryEditBox_LostFocus(object sender, RoutedEventArgs e) {
+            if ((sender as FrameworkElement)?.DataContext is TemplateTargetPoco poco) poco.IsEditingTargetDirectory = false;
+        }
+
+        private void TemplatePathEditBox_GotFocus(object sender, RoutedEventArgs e) {
+            if ((sender as FrameworkElement)?.DataContext is TemplateTargetPoco poco) poco.IsEditingTemplatePath = true;
+        }
+
+        private void TemplatePathEditBox_LostFocus(object sender, RoutedEventArgs e) {
+            if ((sender as FrameworkElement)?.DataContext is TemplateTargetPoco poco) poco.IsEditingTemplatePath = false;
         }
 
         private void OnCopyToClipboardRequested(object sender, string textToCopy) {
