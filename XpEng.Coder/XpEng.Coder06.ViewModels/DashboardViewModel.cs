@@ -348,39 +348,49 @@ namespace XpEng.Coder06.ViewModels {
 
         private async Task ConsumeWatcherEventsAsync(CancellationToken token) {
             try {
-                await foreach (var changeEvent in Watcher.ReadEventsAsync(token)) {
-                    try {
-                        // 1. ABSOLUTE TOP: Log the raw event the microsecond it hits the channel
-                        Logger.Log($"Raw Event: [{changeEvent.ChangeType}] {changeEvent.FileName} (WatcherID: {changeEvent.WatcherId})");
+                await foreach (var changeEventBatch in Watcher.ReadEventsAsync(token)) {
+                    // Collapse repeats of the same filename within this batch down to the
+                    // most recent one — e.g. a Created immediately followed by one or more
+                    // Changed events for a freshly-written file should process only once.
+                    var distinctEvents = changeEventBatch
+                        .GroupBy(e => e.FileName)
+                        .Select(g => g.Last())
+                        .ToList();
 
-                        var (affectedPlan, affectedSource) = FindSourceDirectory(changeEvent.WatcherId);
+                    foreach (var changeEvent in distinctEvents) {
+                        try {
+                            // 1. ABSOLUTE TOP: Log the raw event the microsecond it hits the channel
+                            Logger.Log($"Raw Event: [{changeEvent.ChangeType}] {changeEvent.FileName} (WatcherID: {changeEvent.WatcherId})");
 
-                        // 2. Expose the mismatch!
-                        if (affectedPlan == null || affectedSource == null) {
-                            Logger.Log($"WARNING: WatcherId {changeEvent.WatcherId} does not match any active Source Directory!");
-                            continue;
+                            var (affectedPlan, affectedSource) = FindSourceDirectory(changeEvent.WatcherId);
+
+                            // 2. Expose the mismatch!
+                            if (affectedPlan == null || affectedSource == null) {
+                                Logger.Log($"WARNING: WatcherId {changeEvent.WatcherId} does not match any active Source Directory!");
+                                continue;
+                            }
+
+                            string fullFilePath = Path.Combine(affectedSource.SourcePath.FullName, changeEvent.FileName ?? string.Empty);
+
+                            // 3. STRICT FILTER: only actively-monitored target/template pairs
+                            var activeTargets = affectedSource.TargetTemplates
+                                .Where(t => t.IsMonitored)
+                                .Select(t => new GenerationTarget(t.TemplatePath.FullName, t.TargetDirectory.FullName))
+                                .ToList();
+
+                            if (!activeTargets.Any()) {
+                                Logger.Log($"Skipping: No active targets configured for plan '{affectedPlan.PlanName}'.");
+                                continue;
+                            }
+
+                            string? oldFilePath = string.IsNullOrEmpty(changeEvent.OldFileName) ? null : Path.Combine(affectedSource.SourcePath.FullName, changeEvent.OldFileName);
+
+                            var caller = DIExtensions.ServiceProvider.GetRequiredService<ITemplatesCaller>();
+                            await caller.ProcessFileAsync(affectedPlan.PlanName, activeTargets, fullFilePath, changeEvent.ChangeType, oldFilePath);
                         }
-
-                        string fullFilePath = Path.Combine(affectedSource.SourcePath.FullName, changeEvent.FileName ?? string.Empty);
-
-                        // 3. STRICT FILTER: only actively-monitored target/template pairs
-                        var activeTargets = affectedSource.TargetTemplates
-                            .Where(t => t.IsMonitored)
-                            .Select(t => new GenerationTarget(t.TemplatePath.FullName, t.TargetDirectory.FullName))
-                            .ToList();
-
-                        if (!activeTargets.Any()) {
-                            Logger.Log($"Skipping: No active targets configured for plan '{affectedPlan.PlanName}'.");
-                            continue;
+                        catch (Exception ex) {
+                            Logger.Log($"Processing error for '{changeEvent.FileName}': {ex.Message}");
                         }
-
-                        string? oldFilePath = string.IsNullOrEmpty(changeEvent.OldFileName) ? null : Path.Combine(affectedSource.SourcePath.FullName, changeEvent.OldFileName);
-
-                        var caller = DIExtensions.ServiceProvider.GetRequiredService<ITemplatesCaller>();
-                        await caller.ProcessFileAsync(affectedPlan.PlanName, activeTargets, fullFilePath, changeEvent.ChangeType, oldFilePath);
-                    }
-                    catch (Exception ex) {
-                        Logger.Log($"Processing error for '{changeEvent.FileName}': {ex.Message}");
                     }
                 }
             }
@@ -398,6 +408,11 @@ namespace XpEng.Coder06.ViewModels {
             if (selectedLogs.Any()) {
                 CopyToClipboardRequested?.Invoke(this, string.Join(Environment.NewLine, selectedLogs));
             }
+        }
+
+        [RelayCommand]
+        private void ClearLogs() {
+            LiveLogs.Clear();
         }
 
         [RelayCommand(CanExecute = nameof(CanForceSync))]

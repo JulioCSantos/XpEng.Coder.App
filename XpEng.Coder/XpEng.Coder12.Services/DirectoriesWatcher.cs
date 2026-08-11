@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 using XpEng.Coder80.Infrastructure.Interfaces;
 using XpEng.Coder80.Infrastructure.Services;
 // Add your other required using statements for WatcherConfig and DirectoryChangedEventArgs
@@ -16,8 +17,16 @@ namespace XpEng.Coder12.Services {
         private readonly TimeSpan _debounceThreshold = TimeSpan.FromMilliseconds(50);
         private readonly object _lock = new();
 
-        // Channel for asynchronous event streaming to the ViewModel
-        private readonly Channel<DirectoryChangedEventArgs> _eventChannel = Channel.CreateUnbounded<DirectoryChangedEventArgs>();
+        // Trailing-edge debounce: events for a given Source Directory accumulate here.
+        // Each new event resets that Source Directory's timer; the batch only flushes
+        // once 300ms pass with no further activity for it.
+        private readonly Dictionary<Guid, List<DirectoryChangedEventArgs>> _pendingBatches = new();
+        private readonly Dictionary<Guid, CancellationTokenSource> _debounceTokenSources = new();
+        private readonly TimeSpan _debounceWindow = TimeSpan.FromMilliseconds(300);
+
+        // Channel for asynchronous event streaming to the ViewModel. Each item is a whole
+        // batch of changes for one Source Directory, not a single raw file-system event.
+        private readonly Channel<List<DirectoryChangedEventArgs>> _eventChannel = Channel.CreateUnbounded<List<DirectoryChangedEventArgs>>();
 
         // Dynamically resolve logger exactly like the ViewModel does
         private IEngineLogger Logger => DIExtensions.ServiceProvider.GetRequiredService<IEngineLogger>();
@@ -45,6 +54,15 @@ namespace XpEng.Coder12.Services {
                 }
                 _watchers.Clear();
                 _lastEventTimes.Clear();
+
+                // Cancel any in-flight debounce timers and discard unflushed batches —
+                // monitoring is stopping, so pending changes are no longer relevant.
+                foreach (var cts in _debounceTokenSources.Values) {
+                    cts.Cancel();
+                    cts.Dispose();
+                }
+                _debounceTokenSources.Clear();
+                _pendingBatches.Clear();
             }
         }
 
@@ -52,7 +70,7 @@ namespace XpEng.Coder12.Services {
         /// Exposes the channel reader as an IAsyncEnumerable.
         /// Expected by DashboardViewModel.ConsumeWatcherEventsAsync()
         /// </summary>
-        public IAsyncEnumerable<DirectoryChangedEventArgs> ReadEventsAsync(CancellationToken token) {
+        public IAsyncEnumerable<List<DirectoryChangedEventArgs>> ReadEventsAsync(CancellationToken token) {
             return _eventChannel.Reader.ReadAllAsync(token);
         }
 
@@ -100,29 +118,27 @@ namespace XpEng.Coder12.Services {
             }
         }
 
-        private void OnFileSystemEvent(Guid planId, WatcherConfig config, FileSystemEventArgs e) {
+        private void OnFileSystemEvent(Guid sourceDirectoryId, WatcherConfig config, FileSystemEventArgs e) {
             if (!IsRunning) return;
 
             string fileKey = $"{e.FullPath}_{e.ChangeType}";
             DateTime now = DateTime.UtcNow;
 
             lock (_lock) {
-                // Debounce logic: swallow rapid-fire VS events
+                // Debounce logic: swallow rapid-fire duplicate raw events of the SAME type
                 if (_lastEventTimes.TryGetValue(fileKey, out var lastTime) && (now - lastTime < _debounceThreshold))
                     return;
 
                 _lastEventTimes[fileKey] = now;
             }
 
-            // NEW: Clear, formatted log of the successfully caught event
             Logger.Log($"[CAUGHT EVENT] Plan: {config.PlanName} | File: {e.Name} | Action: {e.ChangeType}");
 
-            // Write to channel
-            var changeEvent = new DirectoryChangedEventArgs(planId, e.Name ?? string.Empty, e.ChangeType.ToString());
-            _eventChannel.Writer.TryWrite(changeEvent);
+            var changeEvent = new DirectoryChangedEventArgs(sourceDirectoryId, e.Name ?? string.Empty, e.ChangeType.ToString());
+            EnqueueForBatch(sourceDirectoryId, changeEvent);
         }
 
-        private void OnFileRenamed(Guid planId, WatcherConfig config, RenamedEventArgs e) {
+        private void OnFileRenamed(Guid sourceDirectoryId, WatcherConfig config, RenamedEventArgs e) {
             if (!IsRunning) return;
 
             string fileKey = $"{e.FullPath}_Renamed";
@@ -137,8 +153,48 @@ namespace XpEng.Coder12.Services {
 
             Logger.Log($"[CAUGHT EVENT] Plan: {config.PlanName} | File: {e.OldName} -> {e.Name} | Action: Renamed");
 
-            var changeEvent = new DirectoryChangedEventArgs(planId, e.Name ?? string.Empty, "Renamed", e.OldName);
-            _eventChannel.Writer.TryWrite(changeEvent);
+            var changeEvent = new DirectoryChangedEventArgs(sourceDirectoryId, e.Name ?? string.Empty, "Renamed", e.OldName);
+            EnqueueForBatch(sourceDirectoryId, changeEvent);
+        }
+
+        // Accumulates one event into its Source Directory's pending batch, then cancels
+        // and restarts that Source Directory's 300ms flush timer — trailing-edge debounce.
+        private void EnqueueForBatch(Guid sourceDirectoryId, DirectoryChangedEventArgs changeEvent) {
+            lock (_lock) {
+                if (!_pendingBatches.TryGetValue(sourceDirectoryId, out var batch)) {
+                    batch = new List<DirectoryChangedEventArgs>();
+                    _pendingBatches[sourceDirectoryId] = batch;
+                }
+                batch.Add(changeEvent);
+
+                if (_debounceTokenSources.TryGetValue(sourceDirectoryId, out var existingCts)) {
+                    existingCts.Cancel();
+                    existingCts.Dispose();
+                }
+
+                var cts = new CancellationTokenSource();
+                _debounceTokenSources[sourceDirectoryId] = cts;
+
+                _ = Task.Delay(_debounceWindow, cts.Token).ContinueWith(t => {
+                    FlushBatch(sourceDirectoryId);
+                }, cts.Token, TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default);
+            }
+        }
+
+        private void FlushBatch(Guid sourceDirectoryId) {
+            List<DirectoryChangedEventArgs>? batchToFlush = null;
+
+            lock (_lock) {
+                if (_pendingBatches.TryGetValue(sourceDirectoryId, out var batch) && batch.Count > 0) {
+                    batchToFlush = batch;
+                    _pendingBatches[sourceDirectoryId] = new List<DirectoryChangedEventArgs>();
+                }
+                _debounceTokenSources.Remove(sourceDirectoryId);
+            }
+
+            if (batchToFlush != null) {
+                _eventChannel.Writer.TryWrite(batchToFlush);
+            }
         }
 
         private void StopAndDisposeWatcher(Guid id) {
