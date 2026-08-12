@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace XpEng.Coder12.Services {
@@ -6,13 +7,13 @@ namespace XpEng.Coder12.Services {
     public interface ITemplatesCaller {
 
         // Orchestration Methods
-        Task ProcessFileAsync(string planName, IEnumerable<GenerationTarget> targets, string sourceFilePath, string changeType, string? oldSourceFilePath = null);
+        Task ProcessBatchAsync(string planName, IEnumerable<GenerationTarget> targets, IEnumerable<FileChange> fileChanges);
 
         Task FullSynchronizationAsync(string planName, IEnumerable<GenerationTarget> targets, string sourceDirectoryPath);
 
         // Individual Execution Methods (Exposed for isolated Unit Testing)
-        Task<string> GenerateMetadataAsync(string planName, string sourceFilePath, string targetDirectory, string templatePath, string changeType, string? oldSourceFilePath = null);
+        Task<string> GenerateMetadataAsync(string planName, string targetDirectory, string templatePath, IEnumerable<FileChange> fileChanges);
 
-        Task ExecuteTemplateAsync(string templatePath, string metadataFilePath, string targetDirectory, string sourceFilePath);
+        Task ExecuteTemplateAsync(string templatePath, string metadataFilePath, string targetDirectory, int fileCount);
     }
 }
