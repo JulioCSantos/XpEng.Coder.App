@@ -1,7 +1,8 @@
 ﻿using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.DependencyInjection;
-using System.Diagnostics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using XpEng.Coder80.Infrastructure.Extensions;
 using XpEng.Coder80.Infrastructure.Interfaces;
@@ -12,6 +13,7 @@ namespace XpEng.Coder12.Services;
 public class TemplatesCaller : ITemplatesCaller {
 
     private IEngineLogger Logger => DIExtensions.ServiceProvider.GetRequiredService<IEngineLogger>();
+    private TemplateCallerClient Caller => DIExtensions.ServiceProvider.GetRequiredService<TemplateCallerClient>();
 
     public async Task ProcessBatchAsync(string planName, IEnumerable<GenerationTarget> targets, IEnumerable<FileChange> fileChanges) {
         try {
@@ -22,8 +24,8 @@ public class TemplatesCaller : ITemplatesCaller {
             Logger.Log($"Processing batch of {changeList.Count} file(s) across {targetList.Count} target(s)...");
 
             foreach (var target in targetList) {
-                // ONE metadata file and ONE t4 process spawn per target, covering every
-                // changed file in the batch — not one spawn per file.
+                // ONE metadata file and ONE t4 invocation per target, covering every
+                // changed file in the batch — not one invocation per file.
                 string metadataFilePath = await GenerateMetadataAsync(planName, target.TargetDirectory, target.TemplatePath, changeList);
                 await ExecuteTemplateAsync(target.TemplatePath, metadataFilePath, target.TargetDirectory, changeList.Count);
             }
@@ -110,31 +112,24 @@ public class TemplatesCaller : ITemplatesCaller {
 
     public async Task ExecuteTemplateAsync(string templatePath, string metadataFilePath, string targetDirectory, int fileCount) {
         string templateName = Path.GetFileNameWithoutExtension(templatePath);
-        string t4LogPath = Path.Combine(targetDirectory, $"{templateName}_batch_Execution.log");
 
-        var processInfo = new ProcessStartInfo {
-            FileName = "t4",
-            Arguments = $"\"{templatePath}\" -o \"{t4LogPath}\" -p:MetadataFilePath=\"{metadataFilePath}\" -p:TargetDirectory=\"{targetDirectory}\"",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
+        string templateContent = await File.ReadAllTextAsync(templatePath);
+        string templateHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(templateContent)));
+
+        var sessionParameters = new Dictionary<string, string> {
+            ["MetadataFilePath"] = metadataFilePath,
+            ["TargetDirectory"] = targetDirectory
         };
 
-        using var process = new Process { StartInfo = processInfo };
-        process.Start();
+        var response = await Caller.GenerateAsync(templatePath, templateContent, templateHash, sessionParameters, targetDirectory, CancellationToken.None);
 
-        string errors = await process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-
-        if (process.ExitCode != 0) {
-            Logger.Log($"Template execution failed for {templateName} ({fileCount} file(s)): {errors}");
+        if (!response.Success) {
+            Logger.Log($"Template execution failed for {templateName} ({fileCount} file(s)): {response.ErrorMessage}");
         }
         else {
-            Logger.Log($"Template execution finished for {templateName} ({fileCount} file(s)).");
+            Logger.Log($"Template execution finished for {templateName} ({fileCount} file(s)) in {response.ElapsedMilliseconds}ms.");
         }
 
         if (File.Exists(metadataFilePath)) File.Delete(metadataFilePath);
-        if (File.Exists(t4LogPath)) File.Delete(t4LogPath);
     }
 }

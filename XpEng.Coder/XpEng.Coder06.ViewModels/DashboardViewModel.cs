@@ -363,11 +363,18 @@ namespace XpEng.Coder06.ViewModels {
                             continue;
                         }
 
-                        // Collapse repeats of the same filename within this batch down to the
-                        // most recent one — e.g. Created immediately followed by Changed.
                         var distinctEvents = changeEventBatch
                             .GroupBy(e => e.FileName)
-                            .Select(g => g.Last())
+                            .Select(g => {
+                                var latest = g.Last();
+                                string fullPath = Path.Combine(affectedSource.SourcePath.FullName, latest.FileName ?? string.Empty);
+                                bool existsNow = File.Exists(fullPath);
+                                bool hadCreate = g.Any(e => e.ChangeType == "Created");
+                                string effectiveType = !existsNow ? "Deleted" : hadCreate ? "Created" : latest.ChangeType;
+                                return effectiveType == latest.ChangeType
+                                    ? latest
+                                    : new DirectoryChangedEventArgs(latest.WatcherId, latest.FileName, effectiveType, latest.OldFileName);
+                            })
                             .ToList();
 
                         foreach (var changeEvent in distinctEvents) {
