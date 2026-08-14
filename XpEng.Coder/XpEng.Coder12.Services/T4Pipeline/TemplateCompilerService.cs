@@ -1,7 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using Mono.TextTemplating;
 using XpEng.Coder80.Infrastructure;
-namespace XpEng.Coder12.Services {
+namespace XpEng.Coder12.Services.T4Pipeline {
     public sealed class TemplateCompilerService {
         private sealed class HostAwareTemplateGenerator : TemplateGenerator {
             public void SetTemplateFile(string path) => TemplateFile = path;

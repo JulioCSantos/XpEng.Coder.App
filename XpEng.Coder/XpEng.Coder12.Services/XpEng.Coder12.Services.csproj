@@ -6,14 +6,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+	<ItemGroup>
+		<ProjectReference Include="..\XpEng.Coder80.Infrastructure\XpEng.Coder80.Infrastructure.csproj" />
+	</ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="MessagePack" Version="3.1.8" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" />
     <PackageReference Include="Mono.TextTemplating" Version="3.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\XpEng.Coder88.Infrastructure\XpEng.Coder80.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

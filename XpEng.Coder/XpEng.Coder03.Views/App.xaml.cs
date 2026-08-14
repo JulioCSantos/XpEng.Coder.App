@@ -6,7 +6,7 @@ using System.IO;
 using System.Windows;
 using XpEng.Coder03.Views.Views;
 using XpEng.Coder06.ViewModels;
-using XpEng.Coder12.Services;
+using XpEng.Coder12.Services.T4Pipeline;
 using XpEng.Coder80.Infrastructure.Interfaces;
 using XpEng.Coder80.Infrastructure.Services;
 

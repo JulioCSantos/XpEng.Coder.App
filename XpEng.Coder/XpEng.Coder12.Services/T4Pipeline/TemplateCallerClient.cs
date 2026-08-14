@@ -1,8 +1,8 @@
 ﻿using System.Collections.Concurrent;
 using System.IO.Pipes;
 using MessagePack;
-using XpEng.Coder80.Infrastructure;
-namespace XpEng.Coder12.Services {
+using XpEng.Coder80.Infrastructure.T4Pipeline;
+namespace XpEng.Coder12.Services.T4Pipeline {
     public sealed class TemplateCallerClient : IAsyncDisposable {
         private readonly ConcurrentDictionary<int, TaskCompletionSource<T4GenerationResponse>> _pending = new();
         private NamedPipeClientStream? _pipe;

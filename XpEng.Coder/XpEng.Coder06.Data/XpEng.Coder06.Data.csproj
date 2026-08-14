@@ -17,7 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\XpEng.Coder09.Models\XpEng.Coder09.Models.csproj" />
-    <ProjectReference Include="..\XpEng.Coder88.Infrastructure\XpEng.Coder80.Infrastructure.csproj" />
+    <ProjectReference Include="..\XpEng.Coder80.Infrastructure\XpEng.Coder80.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

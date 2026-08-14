@@ -1,10 +1,10 @@
 ﻿using MessagePack;
 using Microsoft.Extensions.DependencyInjection;
 using System.IO.Pipes;
-using XpEng.Coder80.Infrastructure;
 using XpEng.Coder80.Infrastructure.Interfaces;
 using XpEng.Coder80.Infrastructure.Services;
-namespace XpEng.Coder12.Services {
+using XpEng.Coder80.Infrastructure.T4Pipeline;
+namespace XpEng.Coder12.Services.T4Pipeline {
     public enum T4HostStatus { NotStarted, Active, Disposed }
     public sealed class T4HostServer : IDisposable {
         private static readonly Lock InstanceLock = new();

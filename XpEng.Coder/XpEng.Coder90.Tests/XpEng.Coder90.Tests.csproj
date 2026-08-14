@@ -9,16 +9,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="XpEng.Coder88.Infrastructure\**" />
-    <EmbeddedResource Remove="XpEng.Coder88.Infrastructure\**" />
-    <None Remove="XpEng.Coder88.Infrastructure\**" />
+    <Compile Remove="XpEng.Coder80.Infrastructure\**" />
+    <EmbeddedResource Remove="XpEng.Coder80.Infrastructure\**" />
+    <None Remove="XpEng.Coder80.Infrastructure\**" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\XpEng.Coder06.Data\XpEng.Coder06.Data.csproj" />
     <ProjectReference Include="..\XpEng.Coder06.ViewModels\XpEng.Coder06.ViewModels.csproj" />
     <ProjectReference Include="..\XpEng.Coder09.Models\XpEng.Coder09.Models.csproj" />
-    <ProjectReference Include="..\XpEng.Coder88.Infrastructure\XpEng.Coder80.Infrastructure.csproj" />
+    <ProjectReference Include="..\XpEng.Coder80.Infrastructure\XpEng.Coder80.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

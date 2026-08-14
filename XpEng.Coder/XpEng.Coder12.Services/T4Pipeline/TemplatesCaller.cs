@@ -8,7 +8,7 @@ using XpEng.Coder80.Infrastructure.Extensions;
 using XpEng.Coder80.Infrastructure.Interfaces;
 using XpEng.Coder80.Infrastructure.Services;
 
-namespace XpEng.Coder12.Services;
+namespace XpEng.Coder12.Services.T4Pipeline;
 
 public class TemplatesCaller : ITemplatesCaller {
 

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace XpEng.Coder12.Services {
+namespace XpEng.Coder12.Services.T4Pipeline {
     // No Tier 09 references here
     public interface ITemplatesCaller {
 

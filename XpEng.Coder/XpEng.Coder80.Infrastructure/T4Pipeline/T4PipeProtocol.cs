@@ -1,6 +1,6 @@
 ﻿using System.Buffers.Binary;
 
-namespace XpEng.Coder80.Infrastructure; 
+namespace XpEng.Coder80.Infrastructure.T4Pipeline; 
 public static class T4PipeProtocol {
     public const string PipeName = "XpEngCoder.T4Host";
     public static async Task WriteFrameAsync(Stream stream, ReadOnlyMemory<byte> payload, CancellationToken ct) {

@@ -16,7 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\XpEng.Coder88.Infrastructure\XpEng.Coder80.Infrastructure.csproj" />
+    <ProjectReference Include="..\XpEng.Coder80.Infrastructure\XpEng.Coder80.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

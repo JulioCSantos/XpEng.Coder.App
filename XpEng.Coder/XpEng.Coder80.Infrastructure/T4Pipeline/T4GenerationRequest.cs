@@ -1,4 +1,4 @@
-﻿namespace XpEng.Coder80.Infrastructure;
+﻿namespace XpEng.Coder80.Infrastructure.T4Pipeline;
 
 public sealed class T4GenerationRequest {
     public int RequestId { get; set; }
