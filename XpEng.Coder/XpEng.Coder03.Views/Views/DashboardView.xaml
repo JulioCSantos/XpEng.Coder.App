@@ -7,7 +7,7 @@
              xmlns:converters="clr-namespace:XpEng.Coder03.Views.Converters"
              mc:Ignorable="d"
              DataContext="{Binding DashboardViewModel, Source={x:Static viewModels:MainViewModel.Instance}}"             
-             d:DesignHeight="800" d:DesignWidth="1200">
+             d:DesignHeight="700" d:DesignWidth="1100">
 
     <UserControl.Resources>
         <converters:BooleanToStringConverter x:Key="BoolToStringConverter"/>
@@ -16,9 +16,9 @@
     <Grid Margin="15">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="2*"/>
+            <RowDefinition Height="300" MinHeight="150"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="1*"/>
+            <RowDefinition Height="*" MinHeight="100"/>
         </Grid.RowDefinitions>
 
         <!-- ACTION BAR -->
