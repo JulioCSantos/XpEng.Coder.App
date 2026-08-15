@@ -32,8 +32,25 @@ namespace XpEng.Coder09.Models.Transport {
         #region TargetTemplates
         [JsonPropertyOrder(3)] // Regular property syntax
         public ObservableCollection<TargetTemplatePoco> TargetTemplates {
-            get => field ??= new ObservableCollection<TargetTemplatePoco>();
-            set => field = value;
+            get => field ??= CreateTrackedCollection();
+            set { field = value; AttachParentTracking(field); }
+        }
+
+        // Ensures every TargetTemplatePoco in this collection has Parent set to this
+        // SourceDirectoryPoco, regardless of whether items arrive via .Add() (backfilled through
+        // CollectionChanged) or the whole collection being replaced via the setter (backfilled
+        // immediately below) — covers both explicit code paths and JSON deserialization either way.
+        private ObservableCollection<TargetTemplatePoco> CreateTrackedCollection() {
+            var collection = new ObservableCollection<TargetTemplatePoco>();
+            AttachParentTracking(collection);
+            return collection;
+        }
+
+        private void AttachParentTracking(ObservableCollection<TargetTemplatePoco> collection) {
+            foreach (var poco in collection) poco.Parent = this;
+            collection.CollectionChanged += (_, e) => {
+                if (e.NewItems != null) foreach (TargetTemplatePoco poco in e.NewItems) poco.Parent = this;
+            };
         }
         #endregion TargetTemplates
 

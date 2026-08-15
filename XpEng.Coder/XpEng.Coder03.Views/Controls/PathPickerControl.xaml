@@ -1,0 +1,39 @@
+﻿<UserControl x:Class="XpEng.Coder03.Views.Controls.PathPickerControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel>
+        <Grid Margin="0,0,0,2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="{Binding Label, RelativeSource={RelativeSource AncestorType=UserControl}}" FontSize="11" Foreground="#9CA3AF"/>
+            <TextBlock Grid.Column="1" Text="Pick" FontSize="11" Foreground="#9CA3AF" HorizontalAlignment="Center"/>
+        </Grid>
+        <Grid Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Grid Grid.Column="0">
+                <TextBox x:Name="PathEditBox" Text="{Binding PathValue, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Padding="4,2"/>
+                <TextBlock x:Name="PathDisplayText" Text="{Binding DisplayValue, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                           ToolTip="{Binding PathValue, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                           Background="White" Padding="6,4" IsHitTestVisible="True"
+                           MouseLeftButtonDown="Overlay_MouseLeftButtonDown">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsKeyboardFocusWithin, ElementName=PathEditBox}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Grid>
+            <Button Grid.Column="1" Content="..." Click="PickButton_Click" Padding="6,0" MinWidth="24" FontSize="11" ToolTip="{Binding DialogTitle, RelativeSource={RelativeSource AncestorType=UserControl}}" VerticalAlignment="Center" Margin="4,0,0,0"/>
+        </Grid>
+    </StackPanel>
+</UserControl>

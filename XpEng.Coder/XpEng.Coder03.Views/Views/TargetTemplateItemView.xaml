@@ -1,0 +1,28 @@
+﻿<UserControl x:Class="XpEng.Coder03.Views.Views.TargetTemplateItemView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:XpEng.Coder03.Views.Controls"
+             xmlns:views="clr-namespace:XpEng.Coder03.Views.Views">
+    <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1" Margin="0,0,8,8" Padding="8" HorizontalAlignment="Stretch">
+        <StackPanel>
+            <Grid Margin="0,0,0,6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <CheckBox Grid.Column="0" IsChecked="{Binding IsMonitored}" ToolTip="Monitor" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1"/>
+                <Button Grid.Column="2" Content=" &#10060; "
+                        Command="{Binding DataContext.DeleteTargetTemplateCommand, RelativeSource={RelativeSource AncestorType={x:Type views:DashboardView}}}"
+                        CommandParameter="{Binding}"
+                        Foreground="DarkRed" FontWeight="Bold" Background="Transparent" BorderThickness="0"
+                        ToolTip="Delete Target/Template" VerticalAlignment="Center"/>
+            </Grid>
+
+            <controls:PathPickerControl x:Name="TargetPicker" Label="Target Directory" PathValue="{Binding TargetDirectory, Mode=TwoWay}" DisplayValue="{Binding TargetDirectoryDisplay}" DefaultPath="{Binding Parent.SolutionsDirectory}" DialogKind="Folder" DialogTitle="Select Target Output Directory"/>
+
+            <controls:PathPickerControl x:Name="TemplatePicker" Label="Template" PathValue="{Binding TemplatePath, Mode=TwoWay}" DisplayValue="{Binding TemplatePathDisplay}" DefaultPath="{Binding Parent.SolutionsDirectory}" DialogKind="File" FileFilter="T4 Templates (*.tt)|*.tt|All Files (*.*)|*.*" DialogTitle="Select T4 Template File"/>
+        </StackPanel>
+    </Border>
+</UserControl>

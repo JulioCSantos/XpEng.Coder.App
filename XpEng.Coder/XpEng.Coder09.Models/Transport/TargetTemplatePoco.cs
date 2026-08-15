@@ -45,13 +45,11 @@ namespace XpEng.Coder09.Models.Transport {
         [property: JsonPropertyOrder(4)]
         private bool _isMonitored = false;
 
-        [ObservableProperty]
-        [property: JsonIgnore]
-        private bool _isEditingTargetDirectory;
-
-        [ObservableProperty]
-        [property: JsonIgnore]
-        private bool _isEditingTemplatePath;
+        // Set by SourceDirectoryPoco.TargetTemplates whenever this poco is added to (or already
+        // present in) its owning collection — replaces the old VisualTreeHelper ancestor walk
+        // that browse dialogs used to rely on for a default path.
+        [JsonIgnore]
+        public SourceDirectoryPoco? Parent { get; internal set; }
 
         [JsonIgnore]
         public bool IsEmpty => string.IsNullOrWhiteSpace(TargetDirectory) && string.IsNullOrWhiteSpace(TemplatePath);
