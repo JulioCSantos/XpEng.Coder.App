@@ -1,10 +1,15 @@
 ﻿<Application x:Class="XpEng.Coder03.Views.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:XpEng.Coder03.Views"
-             >
+             xmlns:local="clr-namespace:XpEng.Coder03.Views">
+
     <Application.Resources>
-        <!-- Globally instantiate the TemplateLocator -->
-        <local:TemplateLocator x:Key="GlobalTemplateLocator" />
+        <ResourceDictionary>
+            <local:TemplateLocator x:Key="GlobalTemplateLocator" />
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/MonitoredStateStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
+
 </Application>

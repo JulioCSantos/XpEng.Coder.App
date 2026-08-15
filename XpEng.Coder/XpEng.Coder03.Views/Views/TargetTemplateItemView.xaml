@@ -7,13 +7,21 @@
         <StackPanel>
             <Grid Margin="0,0,0,6">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <CheckBox Grid.Column="0" IsChecked="{Binding IsMonitored}" ToolTip="Monitor" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1"/>
-                <Button Grid.Column="2" Content=" &#10060; "
+                <CheckBox Grid.Column="0" Content="Monitored" IsChecked="{Binding IsMonitored}" IsEnabled="{Binding CanBeMonitored}" VerticalAlignment="Center" FontWeight="SemiBold">
+                    <CheckBox.Style>
+                        <Style TargetType="CheckBox" BasedOn="{StaticResource MonitoredAwareCheckBoxStyle}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding CanBeMonitored}" Value="False">
+                                    <Setter Property="ToolTip" Value="{Binding MonitoringDisabledReason}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </CheckBox.Style>
+                </CheckBox>
+                <Button Grid.Column="1" Content=" &#10060; "
                         Command="{Binding DataContext.DeleteTargetTemplateCommand, RelativeSource={RelativeSource AncestorType={x:Type views:DashboardView}}}"
                         CommandParameter="{Binding}"
                         Foreground="DarkRed" FontWeight="Bold" Background="Transparent" BorderThickness="0"

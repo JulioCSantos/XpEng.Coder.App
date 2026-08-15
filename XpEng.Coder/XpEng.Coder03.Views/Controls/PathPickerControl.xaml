@@ -7,8 +7,10 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="{Binding Label, RelativeSource={RelativeSource AncestorType=UserControl}}" FontSize="11" Foreground="#9CA3AF"/>
-            <TextBlock Grid.Column="1" Text="Pick" FontSize="11" Foreground="#9CA3AF" HorizontalAlignment="Center"/>
+            <TextBlock Grid.Column="0" Text="{Binding Label, RelativeSource={RelativeSource AncestorType=UserControl}}" FontSize="11"
+                       Style="{StaticResource MonitoredAwareTextBlockStyle}"/>
+            <TextBlock Grid.Column="1" Text="Pick" FontSize="11" HorizontalAlignment="Center"
+                       Style="{StaticResource MonitoredAwareTextBlockStyle}"/>
         </Grid>
         <Grid Margin="0,0,0,6">
             <Grid.ColumnDefinitions>
@@ -16,13 +18,14 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <Grid Grid.Column="0">
-                <TextBox x:Name="PathEditBox" Text="{Binding PathValue, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Padding="4,2"/>
+                <TextBox x:Name="PathEditBox" Text="{Binding PathValue, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Padding="4,2"
+                         Style="{StaticResource MonitoredAwareTextBoxStyle}"/>
                 <TextBlock x:Name="PathDisplayText" Text="{Binding DisplayValue, RelativeSource={RelativeSource AncestorType=UserControl}}"
                            ToolTip="{Binding PathValue, RelativeSource={RelativeSource AncestorType=UserControl}}"
                            Background="White" Padding="6,4" IsHitTestVisible="True"
                            MouseLeftButtonDown="Overlay_MouseLeftButtonDown">
                     <TextBlock.Style>
-                        <Style TargetType="TextBlock">
+                        <Style TargetType="TextBlock" BasedOn="{StaticResource MonitoredAwareTextBlockStyle}">
                             <Setter Property="Visibility" Value="Visible"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IsKeyboardFocusWithin, ElementName=PathEditBox}" Value="True">

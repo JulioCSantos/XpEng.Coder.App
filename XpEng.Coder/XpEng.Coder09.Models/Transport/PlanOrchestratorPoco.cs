@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text.Json.Serialization;
@@ -25,12 +27,60 @@ namespace XpEng.Coder09.Models.Transport {
         private bool _isMonitored = true;
 
         #region SourceDirectories
-        [JsonPropertyOrder(4)] // Regular property syntax
+        [JsonPropertyOrder(4)]
         public ObservableCollection<SourceDirectoryPoco> SourceDirectories {
-            get => field ??= new ObservableCollection<SourceDirectoryPoco>();
-            set => field = value;
+            get => field ??= CreateTrackedCollection();
+            set {
+                if (field != null) DetachTracking(field);
+                field = value;
+                AttachTracking(field);
+            }
+        }
+
+        private ObservableCollection<SourceDirectoryPoco> CreateTrackedCollection() {
+            var collection = new ObservableCollection<SourceDirectoryPoco>();
+            AttachTracking(collection);
+            return collection;
+        }
+
+        private void AttachTracking(ObservableCollection<SourceDirectoryPoco> collection) {
+            foreach (var source in collection) AttachSourceDirectory(source);
+            collection.CollectionChanged += OnSourceDirectoriesCollectionChanged;
+        }
+
+        private void DetachTracking(ObservableCollection<SourceDirectoryPoco> collection) {
+            collection.CollectionChanged -= OnSourceDirectoriesCollectionChanged;
+            foreach (var source in collection) DetachSourceDirectory(source);
+        }
+
+        private void OnSourceDirectoriesCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e) {
+            if (e.NewItems != null) foreach (SourceDirectoryPoco source in e.NewItems) AttachSourceDirectory(source);
+            if (e.OldItems != null) foreach (SourceDirectoryPoco source in e.OldItems) DetachSourceDirectory(source);
+            OnPropertyChanged(nameof(HasValidUnmonitoredCards));
+            OnPropertyChanged(nameof(HasInvalidPopulatedCards));
+        }
+
+        private void AttachSourceDirectory(SourceDirectoryPoco source) {
+            source.PropertyChanged += OnSourceDirectoryPropertyChanged;
+        }
+
+        private void DetachSourceDirectory(SourceDirectoryPoco source) {
+            source.PropertyChanged -= OnSourceDirectoryPropertyChanged;
+        }
+
+        private void OnSourceDirectoryPropertyChanged(object? sender, PropertyChangedEventArgs e) {
+            if (e.PropertyName is nameof(SourceDirectoryPoco.HasValidUnmonitoredCards) or nameof(SourceDirectoryPoco.HasInvalidPopulatedCards)) {
+                OnPropertyChanged(nameof(HasValidUnmonitoredCards));
+                OnPropertyChanged(nameof(HasInvalidPopulatedCards));
+            }
         }
         #endregion SourceDirectories
+
+        [JsonIgnore]
+        public bool HasValidUnmonitoredCards => SourceDirectories.Any(s => s.HasValidUnmonitoredCards);
+
+        [JsonIgnore]
+        public bool HasInvalidPopulatedCards => SourceDirectories.Any(s => s.HasInvalidPopulatedCards);
 
         [JsonIgnore]
         public bool IsEmpty => string.IsNullOrWhiteSpace(PlanName) && SourceDirectories.All(s => s.IsEmpty);

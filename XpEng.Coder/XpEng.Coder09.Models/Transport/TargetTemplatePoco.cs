@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System.Text.Json.Serialization;
@@ -21,6 +22,10 @@ namespace XpEng.Coder09.Models.Transport {
         [Required(ErrorMessage = "Target directory cannot be empty.")]
         [PathSyntax]
         [NotifyPropertyChangedFor(nameof(TargetDirectoryDisplay))]
+        [NotifyPropertyChangedFor(nameof(CanBeMonitored))]
+        [NotifyPropertyChangedFor(nameof(IsMonitored))]
+        [NotifyPropertyChangedFor(nameof(MonitoringDisabledReason))]
+        [NotifyPropertyChangedFor(nameof(IsEmpty))]
         private string _targetDirectory = string.Empty;
 
         [JsonIgnore]
@@ -33,6 +38,10 @@ namespace XpEng.Coder09.Models.Transport {
         [PathSyntax]
         [NotifyPropertyChangedFor(nameof(TemplatePathDisplay))]
         [NotifyPropertyChangedFor(nameof(Name))]
+        [NotifyPropertyChangedFor(nameof(CanBeMonitored))]
+        [NotifyPropertyChangedFor(nameof(IsMonitored))]
+        [NotifyPropertyChangedFor(nameof(MonitoringDisabledReason))]
+        [NotifyPropertyChangedFor(nameof(IsEmpty))]
         private string _templatePath = string.Empty;
 
         [JsonIgnore]
@@ -41,13 +50,44 @@ namespace XpEng.Coder09.Models.Transport {
         [JsonIgnore]
         public string Name => Path.GetFileName(TemplatePath);
 
+        [JsonIgnore]
+        public bool TargetDirectoryExists => !string.IsNullOrWhiteSpace(TargetDirectory) && Directory.Exists(TargetDirectory);
+
+        [JsonIgnore]
+        public bool TemplatePathExists => !string.IsNullOrWhiteSpace(TemplatePath) && File.Exists(TemplatePath);
+
+        [JsonIgnore]
+        public bool CanBeMonitored => TargetDirectoryExists && TemplatePathExists && !HasErrors;
+
+        [JsonIgnore]
+        public string MonitoringDisabledReason {
+            get {
+                if (CanBeMonitored) return string.Empty;
+                var reasons = new List<string>();
+                if (string.IsNullOrWhiteSpace(TargetDirectory)) reasons.Add("Target directory is empty");
+                else if (!Directory.Exists(TargetDirectory)) reasons.Add("Target directory does not exist");
+                if (string.IsNullOrWhiteSpace(TemplatePath)) reasons.Add("Template file is empty");
+                else if (!File.Exists(TemplatePath)) reasons.Add("Template file does not exist");
+                if (HasErrors) reasons.Add("Fix validation errors above");
+                return string.Join(" · ", reasons);
+            }
+        }
+
         [ObservableProperty]
         [property: JsonPropertyOrder(4)]
-        private bool _isMonitored = false;
+        [property: JsonPropertyName("IsMonitored")]
+        [NotifyPropertyChangedFor(nameof(IsMonitored))]
+        private bool? _monitoredOverride;
 
-        // Set by SourceDirectoryPoco.TargetTemplates whenever this poco is added to (or already
-        // present in) its owning collection — replaces the old VisualTreeHelper ancestor walk
-        // that browse dialogs used to rely on for a default path.
+        [JsonIgnore]
+        public bool IsMonitored {
+            get => CanBeMonitored && (MonitoredOverride ?? (!string.IsNullOrWhiteSpace(TargetDirectory) && !string.IsNullOrWhiteSpace(TemplatePath)));
+            set {
+                if (MonitoredOverride == value) return;
+                MonitoredOverride = value;
+            }
+        }
+
         [JsonIgnore]
         public SourceDirectoryPoco? Parent { get; internal set; }
 
@@ -56,7 +96,15 @@ namespace XpEng.Coder09.Models.Transport {
         #endregion Properties
 
         #region Constructors
-        public TargetTemplatePoco() { }
+        public TargetTemplatePoco() {
+            PropertyChanged += (_, e) => {
+                if (e.PropertyName == nameof(HasErrors)) {
+                    OnPropertyChanged(nameof(CanBeMonitored));
+                    OnPropertyChanged(nameof(IsMonitored));
+                    OnPropertyChanged(nameof(MonitoringDisabledReason));
+                }
+            };
+        }
         #endregion Constructors
 
         #region Event Handlers & Methods

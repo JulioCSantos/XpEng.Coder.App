@@ -10,10 +10,6 @@
              DataContext="{Binding DashboardViewModel, Source={x:Static viewModels:MainViewModel.Instance}}"             
              d:DesignHeight="700" d:DesignWidth="1100">
 
-    <UserControl.Resources>
-        <converters:BooleanToStringConverter x:Key="BoolToStringConverter"/>
-    </UserControl.Resources>
-
     <Grid Margin="15">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -61,7 +57,15 @@
                                     <TextBox Grid.Column="1" Text="{Binding PlanName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
                                              ToolTip="Plan Name" VerticalAlignment="Center" Margin="0,0,15,0" Padding="4,2"/>
 
-                                    <CheckBox Grid.Column="3" Content="Monitored" IsChecked="{Binding IsMonitored}" VerticalAlignment="Center" Margin="0,0,15,0" FontWeight="SemiBold"/>
+                                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,15,0">
+                                        <CheckBox Content="Monitored" IsChecked="{Binding IsMonitored}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                        <TextBlock Text=" &#9888;" FontSize="14" Foreground="#D97706" VerticalAlignment="Center" Margin="6,0,0,0"
+                                                   ToolTip="This plan has valid Target/Template cards that are currently not monitored."
+                                                   Visibility="{Binding HasValidUnmonitoredCards, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Visible|Collapsed'}"/>
+                                        <TextBlock Text=" &#10071;" FontSize="14" Foreground="#DC2626" VerticalAlignment="Center" Margin="4,0,0,0"
+                                                   ToolTip="This plan has populated cards with invalid paths that cannot be monitored."
+                                                   Visibility="{Binding HasInvalidPopulatedCards, Converter={StaticResource BoolToStringConverter}, ConverterParameter='Visible|Collapsed'}"/>
+                                    </StackPanel>
 
                                     <Button Grid.Column="4" Content=" &#10060; " 
                                             Command="{Binding DataContext.DeletePlanCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
@@ -125,7 +129,7 @@
                                                                                 <Setter Property="Template">
                                                                                     <Setter.Value>
                                                                                         <ControlTemplate TargetType="ListBoxItem">
-                                                                                            <ContentPresenter/>
+                                                                                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
                                                                                         </ControlTemplate>
                                                                                     </Setter.Value>
                                                                                 </Setter>
