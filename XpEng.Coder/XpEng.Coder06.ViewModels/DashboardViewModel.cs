@@ -44,7 +44,6 @@ namespace XpEng.Coder06.ViewModels {
         [ObservableProperty]
         [NotifyPropertyChangedFor(nameof(ToggleButtonText))]
         [NotifyCanExecuteChangedFor(nameof(ToggleWatchCommand))]
-        [NotifyCanExecuteChangedFor(nameof(ForceSyncCommand))]
         private bool _isWatching;
 
         public string ToggleButtonText => IsWatching ? UIConstants.StopWatchingAction : UIConstants.StartWatchingAction;
@@ -148,8 +147,7 @@ namespace XpEng.Coder06.ViewModels {
         #endregion UIPlans
 
         private bool CanToggleWatch => IsWatching || UIPlans.Any(p => p.SourceDirectories.Any(s => s.TargetTemplates.Any(t => !t.IsEmpty)));
-        private bool CanForceSync => !IsWatching && UIPlans.Any(p => p.SourceDirectories.Any(s => s.TargetTemplates.Any(t => !t.IsEmpty)));
-
+        private bool CanForceSync => UIPlans.Any(p => p.SourceDirectories.Any(s => s.TargetTemplates.Any(t => !t.IsEmpty)));
         public event EventHandler<string>? CopyToClipboardRequested;
         #endregion Properties
 
@@ -429,7 +427,27 @@ namespace XpEng.Coder06.ViewModels {
 
         [RelayCommand(CanExecute = nameof(CanForceSync))]
         private async Task ForceSync() {
-            // Existing Force Sync Logic 
+            SaveConfigurationInternal(isAutoSave: true);
+
+            var caller = DIExtensions.ServiceProvider.GetRequiredService<ITemplatesCaller>();
+
+            foreach (var plan in MainModel.Instance.PlanOrchestrators.Where(p => p.IsMonitored)) {
+                foreach (var source in plan.SourceDirectories.Where(s => s.SourcePath != null && s.SourcePath.Exists)) {
+                    var activeTargets = source.TargetTemplates
+                        .Where(t => t.IsMonitored)
+                        .Select(t => new GenerationTarget(t.TemplatePath.FullName, t.TargetDirectory.FullName))
+                        .ToList();
+
+                    if (!activeTargets.Any()) {
+                        Logger.Log($"Skipping Force Sync: no active targets for plan '{plan.PlanName}' / source '{source.SourcePath.FullName}'.");
+                        continue;
+                    }
+
+                    await caller.FullSynchronizationAsync(plan.PlanName, activeTargets, source.SourcePath.FullName);
+                }
+            }
+
+            Logger.Log("Force Sync complete.");
         }
 
         private void NotifyCommands() {
