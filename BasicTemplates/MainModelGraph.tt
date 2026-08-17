@@ -1,0 +1,268 @@
+<#@ template language="C#" hostspecific="true" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Text.Json" #>
+<#@ assembly name="System.Xml" #>
+<#@ assembly name="System.Xml.Linq" #>
+<#@ assembly name="System.Memory" #>
+<#@ assembly name="netstandard" #>
+<#@ assembly name="System.Runtime" #>
+<#@ assembly name="System.Collections" #>
+<#@ assembly name="System.Collections.Immutable" #>
+<#@ assembly name="Microsoft.CodeAnalysis" #>
+<#@ assembly name="Microsoft.CodeAnalysis.CSharp" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Text.Json" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Text.RegularExpressions" #>
+<#@ import namespace="System.Xml.Linq" #>
+<#@ import namespace="Microsoft.CodeAnalysis.CSharp" #>
+<#@ import namespace="Microsoft.CodeAnalysis.CSharp.Syntax" #>
+<#@ parameter name="MetadataFilePath" type="System.String" #>
+<#@ parameter name="TargetDirectory" type="System.String" #>
+<#
+    // ============================================================
+    // FILE FILTERS — the only thing you should need to edit to
+    // change what this template acts on. Rules are OR'd together;
+    // within one rule, every set criterion must match (AND).
+    // ============================================================
+    var Filters = new[] {
+        new FileFilterRule {
+            NamePatterns = new[] { "*.cs" },
+            ExcludeNamePatterns = new[] { "*DbContext.cs", "*.Designer.cs", "*.g.cs" }
+        }
+    };
+
+    if (string.IsNullOrWhiteSpace(MetadataFilePath) || !File.Exists(MetadataFilePath))
+    {
+        Write("Error: MetadataFilePath is missing or invalid.");
+        return string.Empty;
+    }
+    if (string.IsNullOrWhiteSpace(TargetDirectory))
+    {
+        Write("Error: TargetDirectory was not provided.");
+        return string.Empty;
+    }
+
+    string metadataJson = File.ReadAllText(MetadataFilePath);
+    using var document = JsonDocument.Parse(metadataJson);
+    var root = document.RootElement;
+    string namespaceName = ComputeNamespace(TargetDirectory);
+
+    if (!root.TryGetProperty("Files", out var filesElement))
+    {
+        Write("Error: metadata does not contain a Files array.");
+        return string.Empty;
+    }
+
+    var scalarTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+        "bool","byte","sbyte","char","decimal","double","float","int","uint","long","ulong","short","ushort",
+        "string","object","void","datetime","dateonly","timeonly","timespan","guid","byte[]","var"
+    };
+
+    int filesWritten = 0, filesDeleted = 0, skippedCount = 0;
+
+    foreach (var fileEntry in filesElement.EnumerateArray())
+    {
+        string sourceFileName = fileEntry.GetProperty("SourceFileName").GetString();
+        string sourceDirectory = fileEntry.GetProperty("SourceDirectory").GetString();
+        string changeType = fileEntry.GetProperty("ChangeType").GetString();
+
+        if (!ShouldProcess(Filters, $"{sourceFileName}.cs", changeType, () => new List<string>()))
+        {
+            skippedCount++;
+            continue;
+        }
+
+        string outputPath = Path.Combine(TargetDirectory, $"{sourceFileName}.g.cs");
+
+        // Rename: clean up whatever was generated under the old name before processing the new one.
+        if (fileEntry.TryGetProperty("OldSourceFileName", out var oldNameEl) && oldNameEl.ValueKind != JsonValueKind.Null)
+        {
+            string oldName = oldNameEl.GetString();
+            if (!string.IsNullOrWhiteSpace(oldName) && oldName != sourceFileName)
+            {
+                string oldOutputPath = Path.Combine(TargetDirectory, $"{oldName}.g.cs");
+                if (File.Exists(oldOutputPath)) { File.Delete(oldOutputPath); filesDeleted++; }
+            }
+        }
+
+        if (changeType == "Deleted")
+        {
+            if (File.Exists(outputPath)) { File.Delete(outputPath); filesDeleted++; }
+            continue;
+        }
+
+        string sourceFilePath = Path.Combine(sourceDirectory, $"{sourceFileName}.cs");
+        if (!File.Exists(sourceFilePath)) continue;
+
+        var tree = CSharpSyntaxTree.ParseText(File.ReadAllText(sourceFilePath));
+        var syntaxRoot = tree.GetRoot();
+        var classDecl = syntaxRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
+        if (classDecl == null) continue;
+
+        string entityName = classDecl.Identifier.Text;
+
+        var scalarProps = new List<(string Name, string Type)>();
+        var childProps = new List<(string PropertyName, string ChildType)>();
+
+        foreach (var prop in classDecl.DescendantNodes().OfType<PropertyDeclarationSyntax>())
+        {
+            string propName = prop.Identifier.Text;
+            string typeText = prop.Type.ToString().Trim();
+
+            var collectionMatch = Regex.Match(typeText, @"^(?:ICollection|IList|List|IEnumerable|ObservableCollection)<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>$");
+            if (collectionMatch.Success)
+            {
+                string elementType = collectionMatch.Groups[1].Value;
+                if (!scalarTypes.Contains(elementType))
+                {
+                    childProps.Add((propName, elementType));
+                    continue;
+                }
+            }
+
+            scalarProps.Add((propName, typeText));
+        }
+
+        // ONE FILE PER ENTITY: its own ObservableObject partial, plus its MainModel
+        // contribution — both in one namespace-consistent, {entityName}.g.cs file.
+        string plural = Pluralize(entityName);
+        var sb = new StringBuilder();
+        sb.AppendLine("// <auto-generated>");
+        sb.AppendLine($"//     Generated from {sourceFileName}.cs by the MainModel graph template.");
+        sb.AppendLine("//     Regenerated whenever the source file changes.");
+        sb.AppendLine("// </auto-generated>");
+        sb.AppendLine();
+        sb.AppendLine("using System;");
+        sb.AppendLine("using System.Collections.ObjectModel;");
+        sb.AppendLine("using CommunityToolkit.Mvvm.ComponentModel;");
+        sb.AppendLine();
+        sb.AppendLine($"namespace {namespaceName};");
+        sb.AppendLine();
+        sb.AppendLine($"public partial class {entityName} : ObservableObject");
+        sb.AppendLine("{");
+
+        foreach (var (name, type) in scalarProps)
+        {
+            string fieldName = "_" + char.ToLower(name[0]) + name.Substring(1);
+            sb.AppendLine("    [ObservableProperty]");
+            sb.AppendLine($"    private {type} {fieldName};");
+            sb.AppendLine();
+        }
+
+        foreach (var (propName, childType) in childProps)
+        {
+            sb.AppendLine($"    public ObservableCollection<{childType}> {propName} {{ get => field ??= new(); set => field = value; }}");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("}");
+        sb.AppendLine();
+        sb.AppendLine("public partial class MainModel");
+        sb.AppendLine("{");
+        sb.AppendLine($"    public ObservableCollection<{entityName}> {plural} => field ??= new();");
+        sb.AppendLine("}");
+
+        File.WriteAllText(outputPath, sb.ToString());
+        filesWritten++;
+    }
+
+    Write($"Batch complete: {filesWritten} file(s) written, {filesDeleted} deleted, {skippedCount} skipped by filter.");
+#>
+<#+
+    private sealed class FileFilterRule
+    {
+        public string[] NamePatterns;
+        public string[] ExcludeNamePatterns;
+        public string[] ChangeTypes;
+        public string RequiredBaseType;
+        public string[] ExcludedBaseTypes;
+    }
+
+    private bool NameMatches(string fileName, string[] patterns)
+    {
+        if (patterns == null || patterns.Length == 0) return true;
+        return patterns.Any(p => Regex.IsMatch(fileName, "^" + Regex.Escape(p).Replace("\\*", ".*").Replace("\\?", ".") + "$", RegexOptions.IgnoreCase));
+    }
+
+    private bool RuleMatches(FileFilterRule rule, string fileName, string changeType, Func<List<string>> getBaseTypes)
+    {
+        if (!NameMatches(fileName, rule.NamePatterns)) return false;
+        if (rule.ExcludeNamePatterns != null && NameMatches(fileName, rule.ExcludeNamePatterns)) return false;
+        if (rule.ChangeTypes != null && rule.ChangeTypes.Length > 0 && !rule.ChangeTypes.Contains(changeType, StringComparer.OrdinalIgnoreCase)) return false;
+
+        if (rule.RequiredBaseType != null || rule.ExcludedBaseTypes != null)
+        {
+            var baseTypes = getBaseTypes();
+            if (rule.RequiredBaseType != null && !baseTypes.Contains(rule.RequiredBaseType)) return false;
+            if (rule.ExcludedBaseTypes != null && rule.ExcludedBaseTypes.Any(baseTypes.Contains)) return false;
+        }
+        return true;
+    }
+
+    private bool ShouldProcess(FileFilterRule[] rules, string fileName, string changeType, Func<List<string>> getBaseTypes)
+        => rules.Any(r => RuleMatches(r, fileName, changeType, getBaseTypes));
+
+    private string ComputeNamespace(string targetDirectory)
+    {
+        var dir = new DirectoryInfo(targetDirectory);
+        string csprojPath = null, projectDir = null;
+        while (dir != null)
+        {
+            var found = dir.GetFiles("*.csproj").FirstOrDefault();
+            if (found != null) { csprojPath = found.FullName; projectDir = dir.FullName; break; }
+            dir = dir.Parent;
+        }
+        if (csprojPath == null) return "GeneratedModels";
+
+        var csprojXml = XDocument.Load(csprojPath);
+        string rootNamespace = csprojXml.Descendants("RootNamespace").FirstOrDefault()?.Value;
+        if (string.IsNullOrWhiteSpace(rootNamespace)) rootNamespace = Path.GetFileNameWithoutExtension(csprojPath);
+
+        string relative = GetRelativePathManual(projectDir, targetDirectory);
+        if (string.IsNullOrEmpty(relative) || relative == ".") return rootNamespace;
+
+        var segments = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).ToList();
+
+        // TargetDirectory's own folder is an organizational "generated output" folder in name
+        // only — go up one level so the namespace matches whatever sits alongside it. Any
+        // other folder name is treated as meaningful and kept in the namespace as-is.
+        string leafFolderName = segments.Count > 0 ? segments[segments.Count - 1] : null;
+        bool isGeneratedFolder = leafFolderName != null &&
+            (leafFolderName.Equals("AutoGenerated", StringComparison.OrdinalIgnoreCase) ||
+             leafFolderName.Equals("Generated", StringComparison.OrdinalIgnoreCase));
+        if (isGeneratedFolder) segments.RemoveAt(segments.Count - 1);
+
+        if (segments.Count == 0) return rootNamespace;
+
+        var sanitized = segments
+            .Select(s => Regex.Replace(s, @"[^A-Za-z0-9_]", "_"))
+            .Select(s => char.IsDigit(s[0]) ? "_" + s : s);
+        return rootNamespace + "." + string.Join(".", sanitized);
+    }
+
+    private string GetRelativePathManual(string basePath, string targetPath)
+    {
+        if (!basePath.EndsWith(Path.DirectorySeparatorChar.ToString())) basePath += Path.DirectorySeparatorChar;
+        var baseUri = new Uri(basePath);
+        var targetUriPath = targetPath.EndsWith(Path.DirectorySeparatorChar.ToString()) ? targetPath : targetPath + Path.DirectorySeparatorChar;
+        var targetUri = new Uri(targetUriPath);
+        if (baseUri.Scheme != targetUri.Scheme) return targetPath;
+        var relativeUri = baseUri.MakeRelativeUri(targetUri);
+        string relativePath = Uri.UnescapeDataString(relativeUri.ToString());
+        relativePath = relativePath.Replace('/', Path.DirectorySeparatorChar);
+        return relativePath.TrimEnd(Path.DirectorySeparatorChar);
+    }
+
+    private string Pluralize(string word)
+    {
+        if (string.IsNullOrEmpty(word)) return word;
+        if (word.EndsWith("y") && word.Length > 1 && !"aeiouAEIOU".Contains(word[word.Length - 2]))
+            return word.Substring(0, word.Length - 1) + "ies";
+        if (word.EndsWith("s") || word.EndsWith("x") || word.EndsWith("z") || word.EndsWith("ch") || word.EndsWith("sh"))
+            return word + "es";
+        return word + "s";
+    }
+#>

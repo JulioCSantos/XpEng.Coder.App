@@ -2,6 +2,7 @@
   <Folder Name="/BasicTemplates/">
     <File Path="BasicTemplates/BasicClassTemplate.tt" />
     <File Path="BasicTemplates/README T4TemplatesContract.md" />
+    <File Path="MainModelGraph.tt" />
   </Folder>
   <Project Path="XpEng.Coder/XpEng.Coder03.Views/XpEng.Coder03.Views.csproj" />
   <Project Path="XpEng.Coder/XpEng.Coder06.Data/XpEng.Coder06.Data.csproj" />
