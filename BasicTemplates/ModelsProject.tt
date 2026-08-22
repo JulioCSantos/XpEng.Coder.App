@@ -170,7 +170,8 @@
         {
             string fieldName = "_" + char.ToLower(name[0]) + name.Substring(1);
             sb.AppendLine("    [ObservableProperty]");
-            sb.AppendLine($"    private {type} {fieldName};");
+            bool needsNullForgiving = !type.EndsWith("?") && ReferenceScalarTypes.Contains(type);
+            sb.AppendLine(needsNullForgiving ? $"    private {type} {fieldName} = null!;" : $"    private {type} {fieldName};");
             sb.AppendLine();
         }
 
@@ -327,6 +328,12 @@
     private static readonly HashSet<string> ScalarTypes = new(StringComparer.OrdinalIgnoreCase) {
         "bool","byte","sbyte","char","decimal","double","float","int","uint","long","ulong","short","ushort",
         "string","object","void","datetime","dateonly","timeonly","timespan","guid","byte[]","var"
+    };
+
+    // Reference-typed scalars (as opposed to value types) — the only ones that actually
+    // trigger CS8618 when declared non-nullable but left unassigned by the constructor.
+    private static readonly HashSet<string> ReferenceScalarTypes = new(StringComparer.OrdinalIgnoreCase) {
+        "string", "object", "byte[]"
     };
 
     private bool IsScalarType(string typeText) => ScalarTypes.Contains(typeText.TrimEnd('?'));
