@@ -11,7 +11,7 @@ public static class ServiceCollectionExtensions {
         services = services.AddServices();
 
         var assembly = typeof(ServiceCollectionExtensions).Assembly;
-        services.ApplyDICustomizations(assembly);
+        services.ApplyRegistrations(assembly);
         return services;
     }
 }

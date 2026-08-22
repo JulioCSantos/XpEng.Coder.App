@@ -14,7 +14,7 @@ namespace XpEng.Coder09.Models {
             services = services.AddInfrastructure();
 
             var assembly = typeof(ServiceCollectionExtensions).Assembly;
-            services.ApplyDICustomizations(assembly);
+            services.ApplyRegistrations(assembly);
             return services;
         }
     }

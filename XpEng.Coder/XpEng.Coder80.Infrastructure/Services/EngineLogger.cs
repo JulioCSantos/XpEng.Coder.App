@@ -5,11 +5,12 @@ using System.Text;
 using XpEng.Coder80.Infrastructure.Interfaces;
 
 namespace XpEng.Coder80.Infrastructure.Services {
+    [Register(typeof(IEngineLogger))]
     public class EngineLogger : IEngineLogger {
 
         #region Properties
         private readonly SynchronizationContext _syncContext;
-        public ObservableCollection<LogItem> LiveLogs { get; } = new();
+        public ObservableCollection<LogItem> LiveLogs { get; } = [ ];
         #endregion Properties
 
         #region Constructors

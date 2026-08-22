@@ -4,6 +4,7 @@ using System.Text;
 using XpEng.Coder80.Infrastructure.Interfaces;
 
 namespace XpEng.Coder80.Infrastructure.Services {
+    [Register(typeof(IConfigPersistence))]
     public class JsonConfigPersistence : IConfigPersistence {
 
         private FileInfo? _configFile;

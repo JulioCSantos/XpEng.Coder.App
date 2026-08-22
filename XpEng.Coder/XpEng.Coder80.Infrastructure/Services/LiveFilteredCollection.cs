@@ -2,7 +2,7 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
 
-namespace TBQuiz80.Infrastructure.Services;
+namespace XpEng.Coder80.Infrastructure.Services;
 
 public sealed class LiveFilteredCollection<T> : ObservableCollection<T> where T : INotifyPropertyChanged {
     private readonly ObservableCollection<T> _source;

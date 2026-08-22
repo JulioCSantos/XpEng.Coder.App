@@ -4,12 +4,14 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using XpEng.Coder80.Infrastructure;
 using XpEng.Coder80.Infrastructure.Extensions;
 using XpEng.Coder80.Infrastructure.Interfaces;
 using XpEng.Coder80.Infrastructure.Services;
 
 namespace XpEng.Coder12.Services.T4Pipeline;
 
+[Register(typeof(ITemplatesCaller), ServiceLifetime.Transient)]
 public class TemplatesCaller : ITemplatesCaller {
 
     private IEngineLogger Logger => DIExtensions.ServiceProvider.GetRequiredService<IEngineLogger>();

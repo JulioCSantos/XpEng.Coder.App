@@ -11,12 +11,12 @@ namespace XpEng.Coder03.Views;
 
 public static class ServiceCollectionExtensions {
     public static IServiceCollection AddViews(this IServiceCollection services) {
-        services.AddSingleton(typeof(MainView));
+        services.AddSingleton<MainView>();
         services = services.AddViewModels();
         services = services.AddData();
 
         var assembly = typeof(ServiceCollectionExtensions).Assembly;
-        services.ApplyDICustomizations(assembly);
+        services.ApplyRegistrations(assembly);
         return services;
     }
 }

@@ -17,7 +17,7 @@ public static class ServiceCollectionExtensions {
             : overrideConnectionString; 
 
         var assembly = typeof(ServiceCollectionExtensions).Assembly;
-        services.ApplyDICustomizations(assembly);
+        services.ApplyRegistrations(assembly);
         return services;
     }
 }
