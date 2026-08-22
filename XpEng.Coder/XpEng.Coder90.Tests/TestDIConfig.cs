@@ -12,7 +12,7 @@ public static class TestDIConfig {
         var services = new ServiceCollection();
 
         // 1. Load Production Config
-        DIConfig.Config(services);
+        services.AddViewModels();
 
         // 2. Project-Level Overrides (Global for all tests)
         var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(MainViewModel));

@@ -11,7 +11,7 @@ public class MainModelTests {
     public void Setup() {
         //Set DI factories
         IServiceCollection servColl = DIExtensions.ServiceCollection;
-        servColl = DIConfig.Config(servColl);
+        servColl.AddModels();
     }
 
     [TestMethod]

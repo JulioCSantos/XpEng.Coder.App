@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using XpEng.Coder06.Data;
+using XpEng.Coder06.ViewModels;
 using XpEng.Coder09.Models.Interfaces;
-using DataDI = XpEng.Coder06.Data.DIConfig;
-using ViewModelsDI = XpEng.Coder06.ViewModels.DIConfig;
 
 namespace XpEng.Coder90.Tests.XpEng.Coder09.Models;
 
@@ -17,8 +17,8 @@ public class ContractResolutionTests {
         string testConnectionString = "Server=TestServer;Database=TestDb;Integrated Security=True;";
 
         // Act: Orchestrate the DI exactly as the Views project would
-        DataDI.Config(services, testConnectionString);
-        ViewModelsDI.Config(services);
+        services.AddData(testConnectionString);
+        services.AddViewModels();
 
         var provider = services.BuildServiceProvider();
 

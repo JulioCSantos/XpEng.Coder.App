@@ -3,7 +3,6 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using XpEng.Coder06.Data;
 using XpEng.Coder09.Models;
 using XpEng.Coder09.Models.Interfaces;
-using DIConfig = XpEng.Coder06.Data.DIConfig;
 
 namespace XpEng.Coder90.Tests.XpEng.Coder06.Data;
 
@@ -16,7 +15,7 @@ public class DataDIConfigTests {
         string testConnectionString = "Server=TestServer;Database=TestDb;Integrated Security=True;";
 
         // Act: Call the Data project's DI configuration directly
-        DIConfig.Config(services, testConnectionString);
+        services.AddData(testConnectionString);
         var provider = services.BuildServiceProvider();
 
         // Assert: Verify that the container can successfully resolve the interface
@@ -31,7 +30,7 @@ public class DataDIConfigTests {
         var services = new ServiceCollection();
 
         // Act: Call the config without passing an override (using the optional parameter)
-        DIConfig.Config(services);
+        services.AddData();
         var provider = services.BuildServiceProvider();
 
         // Assert

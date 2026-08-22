@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/BasicTemplates/">
     <File Path="BasicTemplates/BasicClassTemplate.tt" />
+    <File Path="BasicTemplates/ModelsProject.tt" />
     <File Path="BasicTemplates/README T4TemplatesContract.md" />
     <File Path="MainModelGraph.tt" />
   </Folder>

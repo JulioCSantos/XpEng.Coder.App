@@ -1,0 +1,575 @@
+<#@ template language="C#" hostspecific="true" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Text.Json" #>
+<#@ assembly name="System.Xml" #>
+<#@ assembly name="System.Xml.Linq" #>
+<#@ assembly name="System.Memory" #>
+<#@ assembly name="Microsoft.CodeAnalysis" #>
+<#@ assembly name="Microsoft.CodeAnalysis.CSharp" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Text.Json" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Text.RegularExpressions" #>
+<#@ import namespace="System.Xml.Linq" #>
+<#@ import namespace="Microsoft.CodeAnalysis.CSharp" #>
+<#@ import namespace="Microsoft.CodeAnalysis.CSharp.Syntax" #>
+<#@ parameter name="MetadataFilePath" type="System.String" #>
+<#@ parameter name="TargetDirectory" type="System.String" #>
+<#
+    // ============================================================
+    // FILE FILTERS
+    // ============================================================
+    var Filters = new[] {
+        new FileFilterRule {
+            NamePatterns = new[] { "*.cs" },
+            ExcludeNamePatterns = new[] { "*.Designer.cs", "*.g.cs" },
+            // Type-derivation-based, not filename-based — a DbContext split across a main
+            // file plus companion partials (e.g. "{Context}.Functions.cs") only states
+            // ": DbContext" in ONE of those files, per normal C# partial-class rules, so
+            // this has to be resolved by aggregating base types across the whole source
+            // directory (see GetBaseTypeIndex), not by guessing from any one file's name.
+            ExcludedBaseTypes = new[] { "DbContext" }
+        }
+    };
+
+    // ============================================================
+    // TARGET INFRASTRUCTURE — the one thing to confirm/edit for your
+    // actual target solution's DI mechanism. IEntitySetLoader<T>/
+    // IEntitySaver<T> live in the Models project's own Interfaces
+    // sub-namespace, so they need an explicit using like anything
+    // else — only the DI resolver is genuinely cross-cutting.
+    // ============================================================
+    const string EntityInterfacesNamespace = "TBQuiz09.Models.Interfaces";
+    const string DiResolverUsing = "TBQuiz80.Infrastructure.Services"; // wherever your ServiceProvider accessor lives
+    const string DiResolverExpression = "TBQuiz80.Infrastructure.Services.DIExtensions.ServiceProvider";
+
+    if (string.IsNullOrWhiteSpace(MetadataFilePath) || !File.Exists(MetadataFilePath))
+    {
+        Write("Error: MetadataFilePath is missing or invalid.");
+        return string.Empty;
+    }
+    if (string.IsNullOrWhiteSpace(TargetDirectory))
+    {
+        Write("Error: TargetDirectory was not provided.");
+        return string.Empty;
+    }
+
+    string metadataJson = File.ReadAllText(MetadataFilePath);
+    using var document = JsonDocument.Parse(metadataJson);
+    var root = document.RootElement;
+    string namespaceName = ComputeNamespace(TargetDirectory);
+    string mainModelNamespace = GetProjectRootNamespace(TargetDirectory);
+
+    if (!root.TryGetProperty("Files", out var filesElement))
+    {
+        Write("Error: metadata does not contain a Files array.");
+        return string.Empty;
+    }
+
+    int filesWritten = 0, filesDeleted = 0, skippedCount = 0, undetectedRelationships = 0;
+
+    foreach (var fileEntry in filesElement.EnumerateArray())
+    {
+        string sourceFileName = fileEntry.GetProperty("SourceFileName").GetString();
+        string sourceDirectory = fileEntry.GetProperty("SourceDirectory").GetString();
+        string changeType = fileEntry.GetProperty("ChangeType").GetString();
+
+        if (!ShouldProcess(Filters, $"{sourceFileName}.cs", changeType, () => GetBaseTypesForFile(sourceDirectory, sourceFileName)))
+        {
+            skippedCount++;
+            continue;
+        }
+
+        string outputPath = Path.Combine(TargetDirectory, $"{sourceFileName}.g.cs");
+
+        if (fileEntry.TryGetProperty("OldSourceFileName", out var oldNameEl) && oldNameEl.ValueKind != JsonValueKind.Null)
+        {
+            string oldName = oldNameEl.GetString();
+            if (!string.IsNullOrWhiteSpace(oldName) && oldName != sourceFileName)
+            {
+                string oldOutputPath = Path.Combine(TargetDirectory, $"{oldName}.g.cs");
+                if (File.Exists(oldOutputPath)) { File.Delete(oldOutputPath); filesDeleted++; }
+            }
+        }
+
+        if (changeType == "Deleted")
+        {
+            if (File.Exists(outputPath)) { File.Delete(outputPath); filesDeleted++; }
+            continue;
+        }
+
+        string sourceFilePath = Path.Combine(sourceDirectory, $"{sourceFileName}.cs");
+        if (!File.Exists(sourceFilePath)) continue;
+
+        var tree = CSharpSyntaxTree.ParseText(File.ReadAllText(sourceFilePath));
+        var syntaxRoot = tree.GetRoot();
+        var classDecl = syntaxRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
+        if (classDecl == null) continue;
+
+        string entityName = classDecl.Identifier.Text;
+
+        var scalarProps = new List<(string Name, string Type)>();
+        var navProps = new List<(string PropertyName, string TargetType)>();       // bare entity-typed, "one" side
+        var childProps = new List<(string PropertyName, string ChildType)>();      // collection-typed, "many" side
+
+        foreach (var prop in classDecl.DescendantNodes().OfType<PropertyDeclarationSyntax>())
+        {
+            string propName = prop.Identifier.Text;
+            string typeText = prop.Type.ToString().Trim();
+
+            var collectionMatch = Regex.Match(typeText, @"^(?:ICollection|IList|List|IEnumerable|ObservableCollection)<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>$");
+            if (collectionMatch.Success)
+            {
+                string elementType = collectionMatch.Groups[1].Value;
+                if (!IsScalarType(elementType)) { childProps.Add((propName, elementType)); continue; }
+            }
+
+            if (IsEntityLikeType(typeText))
+            {
+                navProps.Add((propName, typeText.TrimEnd('?')));
+                continue;
+            }
+
+            scalarProps.Add((propName, typeText));
+        }
+
+        string pkName = scalarProps.Any(p => p.Name == "Id") ? "Id" : (scalarProps.Count > 0 ? scalarProps[0].Name : "Id");
+        string plural = Pluralize(entityName);
+        string collectionFieldName = "_" + char.ToLower(plural[0]) + plural.Substring(1);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("// <auto-generated>");
+        sb.AppendLine($"//     Generated from {sourceFileName}.cs by the ModelsProject template.");
+        sb.AppendLine("//     Regenerated whenever the source file changes.");
+        sb.AppendLine("// </auto-generated>");
+        sb.AppendLine();
+        // Explicit, self-contained nullable context — matches the same convention EF Core
+        // Power Tools uses in its own scaffolded files. Never relies on the target project's
+        // own <Nullable> csproj setting, which could differ or change independently.
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine();
+        sb.AppendLine("using System;");
+        sb.AppendLine("using System.Linq;");
+        sb.AppendLine("using System.Collections.ObjectModel;");
+        sb.AppendLine("using System.Threading;");
+        sb.AppendLine("using System.Threading.Tasks;");
+        sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
+        sb.AppendLine("using CommunityToolkit.Mvvm.ComponentModel;");
+        sb.AppendLine($"using {EntityInterfacesNamespace};");
+        sb.AppendLine($"using {DiResolverUsing};");
+        sb.AppendLine();
+        sb.AppendLine($"namespace {namespaceName}");
+        sb.AppendLine("{");
+        sb.AppendLine($"public partial class {entityName} : ModelEntityBase");
+        sb.AppendLine("{");
+
+        // Scalar properties
+        foreach (var (name, type) in scalarProps)
+        {
+            string fieldName = "_" + char.ToLower(name[0]) + name.Substring(1);
+            sb.AppendLine("    [ObservableProperty]");
+            sb.AppendLine($"    private {type} {fieldName};");
+            sb.AppendLine();
+        }
+
+        // "One" side — computed lookup against the sibling MainModel collection, not stored/loaded separately.
+        foreach (var (propName, targetType) in navProps)
+        {
+            var pair = DetectForeignKeyPair(sourceDirectory, targetType, entityName);
+            if (pair == null)
+            {
+                undetectedRelationships++;
+                sb.AppendLine($"    // TODO: could not auto-detect the foreign key for '{propName}' -> {targetType}.");
+                sb.AppendLine($"    // Add a manual implementation in a separate partial file, e.g.:");
+                sb.AppendLine($"    // public {targetType}? {propName} => MainModel.Instance.{Pluralize(targetType)}.FirstOrDefault(x => /* match condition */);");
+                sb.AppendLine();
+                continue;
+            }
+            var (childFk, parentKey) = pair.Value;
+            sb.AppendLine($"    public {targetType}? {propName} => MainModel.Instance.{Pluralize(targetType)}.FirstOrDefault(x => x.{parentKey} == this.{childFk});");
+            sb.AppendLine();
+        }
+
+        // "Many" side — live filtered view over the sibling MainModel collection, matched by FK.
+        // Uses LiveFilteredCollection<T> (Infrastructure) rather than ICollectionView, since
+        // ICollectionView requires PresentationFramework — not available in the Models tier.
+        foreach (var (propName, childType) in childProps)
+        {
+            var pair = DetectForeignKeyPair(sourceDirectory, entityName, childType);
+            string backingField = "_" + char.ToLower(propName[0]) + propName.Substring(1);
+            sb.AppendLine($"    private ObservableCollection<{childType}>? {backingField};");
+            sb.AppendLine($"    public ObservableCollection<{childType}> {propName}");
+            sb.AppendLine("    {");
+            if (pair != null)
+            {
+                var (childFk, parentKey) = pair.Value;
+                sb.AppendLine($"        get {{ if ({backingField} == null) {propName} = new LiveFilteredCollection<{childType}>(MainModel.Instance.{Pluralize(childType)}, x => x.{childFk} == this.{parentKey}, nameof({childType}.{childFk})); return {backingField}!; }}");
+            }
+            else
+            {
+                undetectedRelationships++;
+                // Both suggested-example lines are single-line "//" comments — never nest
+                // "/* */" inside another "/* */" (C# has no nested block comments; the
+                // first "*/" would close early and turn the rest into live, broken code).
+                sb.AppendLine($"        // TODO: could not auto-detect the foreign key linking {childType} back to {entityName}.");
+                sb.AppendLine($"        // Example: new LiveFilteredCollection<{childType}>(MainModel.Instance.{Pluralize(childType)}, x => /* match condition */, nameof({childType}.SomeProperty))");
+                sb.AppendLine($"        get {{ if ({backingField} == null) {propName} = new ObservableCollection<{childType}>(); return {backingField}!; }}");
+            }
+            sb.AppendLine($"        private set => SetProperty(ref {backingField}, value);");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+        }
+
+        // Set-level static operations, discoverable on the entity type itself.
+        sb.AppendLine($"    public static bool Is{plural}Loaded => MainModel.Instance.Is{plural}Loaded;");
+        sb.AppendLine();
+        sb.AppendLine($"    public static Task LoadAllAsync(CancellationToken ct = default) =>");
+        sb.AppendLine($"        Is{plural}Loaded ? Task.CompletedTask : RefreshAllAsync(ct);");
+        sb.AppendLine();
+        sb.AppendLine($"    public static async Task RefreshAllAsync(CancellationToken ct = default)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        OnRefreshing();");
+        sb.AppendLine($"        var loader = {DiResolverExpression}.GetRequiredService<IEntitySetLoader<{entityName}>>();");
+        sb.AppendLine("        var fresh = await loader.LoadAllAsync(ct);");
+        sb.AppendLine($"        var freshIds = fresh.Select(x => x.{pkName}).ToHashSet();");
+        sb.AppendLine($"        var collection = MainModel.Instance.{plural};");
+        sb.AppendLine("        foreach (var freshItem in fresh)");
+        sb.AppendLine("        {");
+        sb.AppendLine($"            var existing = collection.FirstOrDefault(x => Equals(x.{pkName}, freshItem.{pkName}));");
+        sb.AppendLine("            if (existing != null) existing.CopyScalarsFrom(freshItem);");
+        sb.AppendLine("            else collection.Add(freshItem);");
+        sb.AppendLine("        }");
+        sb.AppendLine("        for (int i = collection.Count - 1; i >= 0; i--)");
+        sb.AppendLine($"            if (!freshIds.Contains(collection[i].{pkName})) collection.RemoveAt(i);");
+        sb.AppendLine("        OnRefreshed();");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    public static void UnloadAll()");
+        sb.AppendLine("    {");
+        sb.AppendLine("        OnUnloading();");
+        sb.AppendLine($"        MainModel.Instance.Unload{plural}Storage();");
+        sb.AppendLine("        OnUnloaded();");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    static partial void OnRefreshing();");
+        sb.AppendLine("    static partial void OnRefreshed();");
+        sb.AppendLine("    static partial void OnUnloading();");
+        sb.AppendLine("    static partial void OnUnloaded();");
+        sb.AppendLine();
+
+        sb.AppendLine($"    internal void CopyScalarsFrom({entityName} fresh)");
+        sb.AppendLine("    {");
+        foreach (var (name, _) in scalarProps) sb.AppendLine($"        {name} = fresh.{name};");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+
+        sb.AppendLine("    protected override Task OnSaveAsync(CancellationToken ct) =>");
+        sb.AppendLine($"        {DiResolverExpression}.GetRequiredService<IEntitySaver<{entityName}>>().SaveAsync(this, ct);");
+
+        sb.AppendLine("}");
+        sb.AppendLine("}");
+        sb.AppendLine();
+
+        // MainModel fragment — flat storage + notification + IsXLoaded + unload, for every entity.
+        // Explicitly wrapped in its own namespace block (not inheriting one from above) so
+        // this fragment's namespace is never accidentally coupled to — or silently diverges
+        // from — the entity class's own namespace scoping.
+        sb.AppendLine($"namespace {mainModelNamespace}");
+        sb.AppendLine("{");
+        // MainModel's block lives in the fixed project-root namespace, but its properties
+        // reference entity types declared wherever THIS batch's entities actually landed
+        // (namespaceName) — which is very often a child namespace MainModel's own scope
+        // can't see into automatically. Scoped to just this block, not the whole file.
+        if (mainModelNamespace != namespaceName) sb.AppendLine($"using {namespaceName};");
+        sb.AppendLine("public partial class MainModel");
+        sb.AppendLine("{");
+        sb.AppendLine($"    private ObservableCollection<{entityName}>? {collectionFieldName};");
+        sb.AppendLine($"    public ObservableCollection<{entityName}> {plural}");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        get {{ if ({collectionFieldName} == null) {plural} = new ObservableCollection<{entityName}>(); return {collectionFieldName}!; }}");
+        sb.AppendLine("        private set");
+        sb.AppendLine("        {");
+        sb.AppendLine($"            SetProperty(ref {collectionFieldName}, value);");
+        sb.AppendLine($"            OnPropertyChanged(nameof(Is{plural}Loaded));");
+        sb.AppendLine("        }");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine($"    public bool Is{plural}Loaded => {collectionFieldName} != null;");
+        sb.AppendLine();
+        sb.AppendLine($"    internal void Unload{plural}Storage()");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        if ({collectionFieldName} == null) return;");
+        sb.AppendLine($"        {collectionFieldName} = null;");
+        sb.AppendLine($"        OnPropertyChanged(nameof({plural}));");
+        sb.AppendLine($"        OnPropertyChanged(nameof(Is{plural}Loaded));");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        sb.AppendLine("}");
+
+        File.WriteAllText(outputPath, sb.ToString());
+        filesWritten++;
+    }
+
+    Write($"Batch complete: {filesWritten} file(s) written, {filesDeleted} deleted, {skippedCount} skipped by filter, {undetectedRelationships} relationship(s) could not be auto-detected (see TODO comments).");
+#>
+<#+
+    private sealed class FileFilterRule
+    {
+        public string[] NamePatterns;
+        public string[] ExcludeNamePatterns;
+        public string[] ChangeTypes;
+        public string RequiredBaseType;
+        public string[] ExcludedBaseTypes;
+    }
+
+    private static readonly HashSet<string> ScalarTypes = new(StringComparer.OrdinalIgnoreCase) {
+        "bool","byte","sbyte","char","decimal","double","float","int","uint","long","ulong","short","ushort",
+        "string","object","void","datetime","dateonly","timeonly","timespan","guid","byte[]","var"
+    };
+
+    private bool IsScalarType(string typeText) => ScalarTypes.Contains(typeText.TrimEnd('?'));
+
+    private bool IsEntityLikeType(string typeText)
+    {
+        string bare = typeText.TrimEnd('?');
+        return bare.Length > 0 && char.IsUpper(bare[0]) && !IsScalarType(bare);
+    }
+
+    // Directory-wide index of className -> the union of every base type any partial
+    // declaration of that class mentions, anywhere in the directory. Built once per
+    // directory, then reused for every file — a full rescan per file would be wasteful
+    // once the batch has more than a handful of entities.
+    private Dictionary<string, Dictionary<string, HashSet<string>>> _baseTypeIndexBySourceDirectory = new();
+
+    private Dictionary<string, HashSet<string>> GetBaseTypeIndex(string sourceDirectory)
+    {
+        if (_baseTypeIndexBySourceDirectory.TryGetValue(sourceDirectory, out var cached)) return cached;
+
+        var index = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var filePath in Directory.GetFiles(sourceDirectory, "*.cs"))
+        {
+            var tree = CSharpSyntaxTree.ParseText(File.ReadAllText(filePath));
+            foreach (var cls in tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>())
+            {
+                if (cls.BaseList == null) continue;
+                if (!index.TryGetValue(cls.Identifier.Text, out var baseTypes))
+                    index[cls.Identifier.Text] = baseTypes = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var baseType in cls.BaseList.Types)
+                    baseTypes.Add(baseType.Type.ToString());
+            }
+        }
+        _baseTypeIndexBySourceDirectory[sourceDirectory] = index;
+        return index;
+    }
+
+    // Learns the CURRENT file's own declared class name, then returns its FULL transitive
+    // ancestor chain — not just its immediate base type. A class that derives from an
+    // intermediate base, which itself derives from DbContext (or further still), needs the
+    // whole chain walked, or an exclusion rule checking for "DbContext" would only ever
+    // catch classes that derive from it directly.
+    private List<string> GetBaseTypesForFile(string sourceDirectory, string sourceFileName)
+    {
+        string filePath = Path.Combine(sourceDirectory, $"{sourceFileName}.cs");
+        if (!File.Exists(filePath)) return new List<string>();
+
+        var tree = CSharpSyntaxTree.ParseText(File.ReadAllText(filePath));
+        var classDecl = tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
+        if (classDecl == null) return new List<string>();
+
+        return GetAllAncestorTypes(sourceDirectory, classDecl.Identifier.Text).ToList();
+    }
+
+    // Walks the inheritance chain transitively, hop by hop, via GetBaseTypeIndex. Each hop
+    // that resolves to a locally-declared class recurses further; the moment a base-type
+    // name isn't something declared in this source directory (e.g. the real "DbContext",
+    // which comes from the EF Core package), the recursion naturally stops there — but that
+    // name is still included in the result, since it was reached as a real ancestor.
+    private HashSet<string> GetAllAncestorTypes(string sourceDirectory, string className, HashSet<string>? visited = null)
+    {
+        visited ??= new HashSet<string>(StringComparer.Ordinal);
+        var result = new HashSet<string>(StringComparer.Ordinal);
+        if (!visited.Add(className)) return result; // cycle guard — shouldn't happen in valid C#, stays safe regardless
+
+        var index = GetBaseTypeIndex(sourceDirectory);
+        if (!index.TryGetValue(className, out var directBaseTypes)) return result;
+
+        foreach (var baseType in directBaseTypes)
+        {
+            result.Add(baseType);
+            string baseTypeNameOnly = baseType.Split('<')[0].Trim(); // strip generic args, if any, before treating as a class name
+            foreach (var ancestor in GetAllAncestorTypes(sourceDirectory, baseTypeNameOnly, visited))
+                result.Add(ancestor);
+        }
+        return result;
+    }
+
+    private Dictionary<string, List<(string Name, string Type)>> _propertyCache = new();
+
+    private List<(string Name, string Type)> GetPropertiesForType(string sourceDirectory, string typeName)
+    {
+        string key = sourceDirectory + "|" + typeName;
+        if (_propertyCache.TryGetValue(key, out var cached)) return cached;
+
+        var result = new List<(string, string)>();
+        string path = Path.Combine(sourceDirectory, $"{typeName}.cs");
+        if (File.Exists(path))
+        {
+            var tree = CSharpSyntaxTree.ParseText(File.ReadAllText(path));
+            var cls = tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == typeName);
+            if (cls != null)
+            {
+                foreach (var p in cls.DescendantNodes().OfType<PropertyDeclarationSyntax>())
+                    result.Add((p.Identifier.Text, p.Type.ToString().Trim()));
+            }
+        }
+        _propertyCache[key] = result;
+        return result;
+    }
+
+    // Convention-based, best-effort: looks for a nav-back property on childType whose bare
+    // type equals parentType, derives the FK scalar name from it (stripping a "Navigation"
+    // suffix, or falling back to "{parentType}Id"), then finds a matching key property on
+    // parentType (same name, or "Id"). Returns null if any step can't be resolved — callers
+    // emit a TODO instead of guessing.
+    private (string ChildFk, string ParentKey)? DetectForeignKeyPair(string sourceDirectory, string parentType, string childType)
+    {
+        var childProps = GetPropertiesForType(sourceDirectory, childType);
+        string navPropName = childProps.FirstOrDefault(p => p.Type.TrimEnd('?') == parentType).Name;
+        if (navPropName == null) return null;
+
+        string childFk = null;
+        string candidate = navPropName.EndsWith("Navigation") ? navPropName.Substring(0, navPropName.Length - "Navigation".Length) : navPropName;
+        if (childProps.Any(p => p.Name == candidate && !IsEntityLikeType(p.Type))) childFk = candidate;
+        if (childFk == null)
+        {
+            string candidate2 = parentType + "Id";
+            if (childProps.Any(p => p.Name == candidate2)) childFk = candidate2;
+        }
+        if (childFk == null) return null;
+
+        var parentProps = GetPropertiesForType(sourceDirectory, parentType);
+        // Case-insensitive: scaffolded FK-scalar casing on the child side (e.g. "Drugkey")
+        // doesn't always match the parent's own property casing exactly (e.g. "DrugKey") —
+        // an exact-case match would silently miss this and fall back to "Id" instead,
+        // pairing the wrong types (string vs int) and producing a compile error.
+        var matchedParentProp = parentProps.FirstOrDefault(p => p.Name.Equals(childFk, StringComparison.OrdinalIgnoreCase));
+        string parentKey = matchedParentProp.Name != null ? matchedParentProp.Name
+                          : parentProps.Any(p => p.Name == "Id") ? "Id"
+                          : null;
+        if (parentKey == null) return null;
+
+        return (childFk, parentKey);
+    }
+
+    private bool NameMatches(string fileName, string[] patterns)
+    {
+        if (patterns == null || patterns.Length == 0) return true;
+        return patterns.Any(p => Regex.IsMatch(fileName, "^" + Regex.Escape(p).Replace("\\*", ".*").Replace("\\?", ".") + "$", RegexOptions.IgnoreCase));
+    }
+
+    private bool RuleMatches(FileFilterRule rule, string fileName, string changeType, Func<List<string>> getBaseTypes)
+    {
+        if (!NameMatches(fileName, rule.NamePatterns)) return false;
+        if (rule.ExcludeNamePatterns != null && NameMatches(fileName, rule.ExcludeNamePatterns)) return false;
+        if (rule.ChangeTypes != null && rule.ChangeTypes.Length > 0 && !rule.ChangeTypes.Contains(changeType, StringComparer.OrdinalIgnoreCase)) return false;
+        if (rule.RequiredBaseType != null || rule.ExcludedBaseTypes != null)
+        {
+            var baseTypes = getBaseTypes();
+            if (rule.RequiredBaseType != null && !baseTypes.Contains(rule.RequiredBaseType)) return false;
+            if (rule.ExcludedBaseTypes != null && rule.ExcludedBaseTypes.Any(baseTypes.Contains)) return false;
+        }
+        return true;
+    }
+
+    private bool ShouldProcess(FileFilterRule[] rules, string fileName, string changeType, Func<List<string>> getBaseTypes)
+        => rules.Any(r => RuleMatches(r, fileName, changeType, getBaseTypes));
+
+    // The project's own namespace, straight from its .csproj — no subfolder-collapsing
+    // logic at all. MainModel fragments always anchor to THIS, never to any individual
+    // entity's own computed namespace, so MainModel's identity can never drift based on
+    // where a particular entity's TargetDirectory happens to point.
+    private string GetProjectRootNamespace(string targetDirectory)
+    {
+        var dir = new DirectoryInfo(targetDirectory);
+        string csprojPath = null;
+        while (dir != null)
+        {
+            var found = dir.GetFiles("*.csproj").FirstOrDefault();
+            if (found != null) { csprojPath = found.FullName; break; }
+            dir = dir.Parent;
+        }
+        if (csprojPath == null) return "GeneratedModels";
+
+        var csprojXml = XDocument.Load(csprojPath);
+        string rootNamespace = csprojXml.Descendants("RootNamespace").FirstOrDefault()?.Value;
+        if (string.IsNullOrWhiteSpace(rootNamespace)) rootNamespace = Path.GetFileNameWithoutExtension(csprojPath);
+        return rootNamespace;
+    }
+
+    private string ComputeNamespace(string targetDirectory)
+    {
+        var dir = new DirectoryInfo(targetDirectory);
+        string csprojPath = null, projectDir = null;
+        while (dir != null)
+        {
+            var found = dir.GetFiles("*.csproj").FirstOrDefault();
+            if (found != null) { csprojPath = found.FullName; projectDir = dir.FullName; break; }
+            dir = dir.Parent;
+        }
+        if (csprojPath == null) return "GeneratedModels";
+
+        string rootNamespace = GetProjectRootNamespace(targetDirectory);
+
+        string relative = GetRelativePathManual(projectDir, targetDirectory);
+        if (string.IsNullOrEmpty(relative) || relative == ".") return rootNamespace;
+
+        var segments = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).ToList();
+        string leafFolderName = segments.Count > 0 ? segments[segments.Count - 1] : null;
+
+        bool isConventionalGeneratedFolder = leafFolderName != null &&
+            (leafFolderName.Equals("AutoGenerated", StringComparison.OrdinalIgnoreCase) ||
+             leafFolderName.Equals("Generated", StringComparison.OrdinalIgnoreCase));
+
+        // Also collapse when the leaf folder's name duplicates the trailing segment of the
+        // project's own root namespace (e.g. project "TBQuiz09.Models" with a subfolder also
+        // named "Models") — otherwise the computed namespace ends up doubled, e.g.
+        // "TBQuiz09.Models.Models", which silently breaks implicit access to sibling types
+        // declared directly in the project's real (undoubled) namespace.
+        string rootNamespaceLastSegment = rootNamespace.Split('.').LastOrDefault();
+        bool duplicatesRootTail = leafFolderName != null && rootNamespaceLastSegment != null &&
+            leafFolderName.Equals(rootNamespaceLastSegment, StringComparison.OrdinalIgnoreCase);
+
+        if (isConventionalGeneratedFolder || duplicatesRootTail) segments.RemoveAt(segments.Count - 1);
+        if (segments.Count == 0) return rootNamespace;
+
+        var sanitized = segments
+            .Select(s => Regex.Replace(s, @"[^A-Za-z0-9_]", "_"))
+            .Select(s => char.IsDigit(s[0]) ? "_" + s : s);
+        return rootNamespace + "." + string.Join(".", sanitized);
+    }
+
+    private string GetRelativePathManual(string basePath, string targetPath)
+    {
+        if (!basePath.EndsWith(Path.DirectorySeparatorChar.ToString())) basePath += Path.DirectorySeparatorChar;
+        var baseUri = new Uri(basePath);
+        var targetUriPath = targetPath.EndsWith(Path.DirectorySeparatorChar.ToString()) ? targetPath : targetPath + Path.DirectorySeparatorChar;
+        var targetUri = new Uri(targetUriPath);
+        if (baseUri.Scheme != targetUri.Scheme) return targetPath;
+        var relativeUri = baseUri.MakeRelativeUri(targetUri);
+        string relativePath = Uri.UnescapeDataString(relativeUri.ToString());
+        relativePath = relativePath.Replace('/', Path.DirectorySeparatorChar);
+        return relativePath.TrimEnd(Path.DirectorySeparatorChar);
+    }
+
+    private string Pluralize(string word)
+    {
+        if (string.IsNullOrEmpty(word)) return word;
+        if (word.EndsWith("y") && word.Length > 1 && !"aeiouAEIOU".Contains(word[word.Length - 2]))
+            return word.Substring(0, word.Length - 1) + "ies";
+        if (word.EndsWith("s") || word.EndsWith("x") || word.EndsWith("z") || word.EndsWith("ch") || word.EndsWith("sh"))
+            return word + "es";
+        return word + "s";
+    }
+#>
