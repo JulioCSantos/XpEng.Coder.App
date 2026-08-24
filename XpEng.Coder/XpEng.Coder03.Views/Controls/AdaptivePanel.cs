@@ -2,7 +2,7 @@
 using System.Windows.Controls;
 
 namespace XpEng.Coder03.Views.Controls {
-    public class ResponsivePanel : Panel {
+    public class AdaptivePanel : Panel {
         protected override Size MeasureOverride(Size availableSize) {
             double spacing = 5;
             double currentX = 0;
