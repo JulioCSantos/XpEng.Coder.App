@@ -28,6 +28,43 @@ namespace XpEng.Coder03.Views.Views {
         #endregion Constructors
 
         #region Event Handlers & Methods
+        private void BrowseSetupSolutionFile_Click(object sender, RoutedEventArgs e) {
+            if ((sender as FrameworkElement)?.DataContext is PlanOrchestratorPoco poco) {
+                var dialog = new OpenFileDialog {
+                    Title = "Select Solution File",
+                    Filter = "Visual Studio Solution (*.sln;*.slnx)|*.sln;*.slnx|All Files (*.*)|*.*"
+                };
+                if (!string.IsNullOrWhiteSpace(poco.SetupSolutionFile)) {
+                    var dir = Path.GetDirectoryName(poco.SetupSolutionFile);
+                    if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir)) {
+                        dialog.InitialDirectory = dir;
+                        dialog.FileName = Path.GetFileName(poco.SetupSolutionFile);
+                    }
+                }
+                if (dialog.ShowDialog() == true) {
+                    poco.SetupSolutionFile = dialog.FileName;
+                }
+            }
+        }
+
+        private void BrowseSetupTemplate_Click(object sender, RoutedEventArgs e) {
+            if ((sender as FrameworkElement)?.DataContext is PlanOrchestratorPoco poco) {
+                var dialog = new OpenFileDialog {
+                    Title = "Select Setup Template File",
+                    Filter = "T4 Templates (*.tt)|*.tt|All Files (*.*)|*.*"
+                };
+                if (!string.IsNullOrWhiteSpace(poco.SetupTemplatePath)) {
+                    var dir = Path.GetDirectoryName(poco.SetupTemplatePath);
+                    if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir)) {
+                        dialog.InitialDirectory = dir;
+                        dialog.FileName = Path.GetFileName(poco.SetupTemplatePath);
+                    }
+                }
+                if (dialog.ShowDialog() == true) {
+                    poco.SetupTemplatePath = dialog.FileName;
+                }
+            }
+        }
 
         // SourceDirectory (top of the tree): no ancestor default, browse from wherever it currently points.
         private void BrowseSource_Click(object sender, RoutedEventArgs e) {

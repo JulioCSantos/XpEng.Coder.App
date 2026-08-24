@@ -6,7 +6,7 @@ using XpEng.Coder80.Infrastructure;
 namespace XpEng.Coder06.ViewModels; 
 public static class ServiceCollectionExtensions {
     public static IServiceCollection AddViewModels(this IServiceCollection services) {
-        services.AddSingleton(provider => MainViewModel.Instance);
+        services.AddSingleton<MainViewModel>(_ => new MainViewModel());
         services = services.AddModels();
         services = services.AddServices();
 

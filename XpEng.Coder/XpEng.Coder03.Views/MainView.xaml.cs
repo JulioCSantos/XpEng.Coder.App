@@ -28,6 +28,7 @@ namespace XpEng.Coder03.Views {
             }
 
             base.OnClosed(e);
+            Application.Current.Shutdown();
         }
     }
 }

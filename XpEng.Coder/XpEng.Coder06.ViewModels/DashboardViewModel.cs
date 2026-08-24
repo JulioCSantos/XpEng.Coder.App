@@ -154,7 +154,9 @@ namespace XpEng.Coder06.ViewModels {
         #region Constructors
         public DashboardViewModel() {
             _isInitializing = true;
-            MainModel.Instance.LoadPlans();
+            if (!DesignTimeDetector.IsInDesignMode) {
+                MainModel.Instance.LoadPlans();
+            }
             LoadPocosFromDomain();
             _isInitializing = false;
         }

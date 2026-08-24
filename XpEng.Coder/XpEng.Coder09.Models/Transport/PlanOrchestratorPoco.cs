@@ -6,6 +6,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using XpEng.Coder80.Infrastructure.Extensions;
 
 namespace XpEng.Coder09.Models.Transport {
 
@@ -75,6 +76,27 @@ namespace XpEng.Coder09.Models.Transport {
             }
         }
         #endregion SourceDirectories
+
+        #region Setup
+        // Plan-scoped, one-shot: not part of the SourceDirectories/TargetTemplates watching
+        // hierarchy at all. IsSetupActive is expected to be flipped back to false by the
+        // orchestration layer once Setup completes successfully — see ForceSync().
+        [ObservableProperty]
+        [property: JsonPropertyOrder(5)]
+        private bool _isSetupActive;
+
+        [ObservableProperty]
+        [property: JsonPropertyOrder(6)]
+        private string _setupSolutionFile = string.Empty;
+
+        [ObservableProperty]
+        [property: JsonPropertyOrder(7)]
+        [NotifyPropertyChangedFor(nameof(SetupTemplatePathDisplay))]
+        private string _setupTemplatePath = string.Empty;
+
+        [JsonIgnore]
+        public string SetupTemplatePathDisplay => StringExtensions.Shorten(SetupTemplatePath);
+        #endregion Setup
 
         [JsonIgnore]
         public bool HasValidUnmonitoredCards => SourceDirectories.Any(s => s.HasValidUnmonitoredCards);

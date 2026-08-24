@@ -5,6 +5,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:viewModels="clr-namespace:XpEng.Coder06.ViewModels;assembly=XpEng.Coder06.ViewModels"
              xmlns:views="clr-namespace:XpEng.Coder03.Views.Views"
+             xmlns:controls="clr-namespace:XpEng.Coder03.Views.Controls"
              mc:Ignorable="d"
              DataContext="{Binding DashboardViewModel, Source={x:Static viewModels:MainViewModel.Instance}}"             
              d:DesignHeight="700" d:DesignWidth="1100">
@@ -72,6 +73,73 @@
                                             Foreground="DarkRed" FontWeight="Bold" Background="Transparent" BorderThickness="0"
                                             ToolTip="Delete Plan" VerticalAlignment="Center"/>
                                 </Grid>
+
+                                <!-- SETUP LEVEL — Plan-scoped, one-shot, distinct from continuous file-watching. -->
+                                <Border Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1" Margin="30,0,0,15" Padding="10">
+                                    <StackPanel>
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Setup" FontWeight="SemiBold" Foreground="#4338CA" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            <CheckBox Grid.Column="2" Content="Active" IsChecked="{Binding IsSetupActive, Mode=TwoWay}" VerticalAlignment="Center" FontWeight="SemiBold"
+                                                      ToolTip="Runs on the next Force Sync. Automatically unchecks itself once Setup completes successfully."/>
+                                        </Grid>
+
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Solution File:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                            <TextBox Grid.Column="1" Text="{Binding SetupSolutionFile, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
+                                                     ToolTip="Solution File (.sln / .slnx)" VerticalAlignment="Center" Padding="4,2"/>
+                                            <!-- Solution File Button -->
+                                            <Button Grid.Column="2"  Click="BrowseSetupSolutionFile_Click" ToolTip="Select Solution File" Style="{StaticResource BrowseButtonStyle}"/>
+                                        </Grid>
+                                        <controls:ResponsivePanel Margin="0,0,0,8">
+
+                                            <!-- Child 1: Fixed-width TextBlock -->
+                                            <TextBlock Text="Setup Template:" Width="95" FontWeight="Bold" VerticalAlignment="Center"/>
+
+                                            <!-- Child 2: Grid containing your TextBox and Button -->
+                                            <Grid VerticalAlignment="Center">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Only the TextBox keeps a MinWidth constraint -->
+                                                <TextBox Grid.Column="0" Text="{Binding SetupTemplatePathDisplay, Mode=OneWay}" IsReadOnly="True"
+                                                         ToolTip="{Binding SetupTemplatePath}" VerticalAlignment="Center" Padding="4,2"
+                                                         MinWidth="220" MaxWidth="900"/>
+
+                                                <Button Grid.Column="1" Click="BrowseSetupTemplate_Click" ToolTip="Select Setup Template File" Style="{StaticResource BrowseButtonStyle}"/>
+                                            </Grid>
+
+                                        </controls:ResponsivePanel>
+                                        <!--<controls:AdaptiveStackPanel Margin="0,0,0,8" MinWidth="345">
+                                            <TextBlock Text="Setup Template:" Width="95" FontWeight="Bold" VerticalAlignment="Center"/>
+                                            <Grid MinWidth="250">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBox Grid.Column="0" Text="{Binding SetupTemplatePathDisplay, Mode=OneWay}" IsReadOnly="True"
+                                                         ToolTip="{Binding SetupTemplatePath}" VerticalAlignment="Center" Padding="4,2"
+                                                         MinWidth="220" MaxWidth="900"/>
+                                                <Button Grid.Column="1" Content="..." Click="BrowseSetupTemplate_Click" Width="30" Padding="6,0" VerticalAlignment="Center" FontSize="11" ToolTip="Select Setup Template File"/>
+                                            </Grid>
+                                        </controls:AdaptiveStackPanel>-->
+
+                                        <!--<controls:PathPickerControl Label="Setup Template" PathValue="{Binding SetupTemplatePath, Mode=TwoWay}" DisplayValue="{Binding SetupTemplatePathDisplay}"
+                                                                    DialogKind="File"
+                                                                    FileFilter="T4 Templates (*.tt)|*.tt|All Files (*.*)|*.*" DialogTitle="Select Setup Template File"/>-->
+                                    </StackPanel>
+                                </Border>
 
                                 <!-- SOURCE DIRECTORY LEVEL -->
                                 <Grid Margin="30,0,0,0">

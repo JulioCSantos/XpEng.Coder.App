@@ -33,5 +33,26 @@
             </DataTrigger>
         </Style.Triggers>
     </Style>
+    <!-- Add to MonitoredStateStyles.xaml, or a new shared resource dictionary — thinner
+     scrollbars, roughly half the default ~17px, for use alongside AdaptiveStackPanel. -->
+    <Style x:Key="ThinScrollBarStyle" TargetType="ScrollBar" BasedOn="{StaticResource {x:Type ScrollBar}}">
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Height" Value="9"/>
+            </Trigger>
+            <Trigger Property="Orientation" Value="Vertical">
+                <Setter Property="Width" Value="9"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Shared Style for Browse Buttons -->
+    <Style x:Key="BrowseButtonStyle" TargetType="Button">
+        <Setter Property="Content" Value="..."/>
+        <Setter Property="Width" Value="28"/>
+        <Setter Property="Padding" Value="6,0"/>
+        <Setter Property="Margin" Value="4,0,0,0"/>
+        <Setter Property="FontSize" Value="11"/>
+    </Style>
 
 </ResourceDictionary>

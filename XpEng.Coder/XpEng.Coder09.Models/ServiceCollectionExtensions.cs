@@ -10,7 +10,7 @@ namespace XpEng.Coder09.Models {
     public static class ServiceCollectionExtensions {
         public static IServiceCollection AddModels(this IServiceCollection services) {
             services.AddSingleton<IConfigPersistence, JsonConfigPersistence>();
-            services.AddSingleton(provider => MainModel.Instance);
+            services.AddSingleton<MainModel>(_ => new MainModel());
             services = services.AddInfrastructure();
 
             var assembly = typeof(ServiceCollectionExtensions).Assembly;

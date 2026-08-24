@@ -1,20 +1,22 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using XpEng.Coder09.Models;
+using XpEng.Coder80.Infrastructure.Services;
 
 namespace XpEng.Coder06.ViewModels;
 
 public partial class MainViewModel : ObservableObject, IDisposable {
 
-    private static readonly Lazy<MainViewModel> _instance = new(() => new MainViewModel());
-    public static MainViewModel Instance => _instance.Value;
+    public static MainViewModel Instance => DesignTimeSingleton<MainViewModel>.Resolve(() => new MainViewModel());
 
-    protected MainViewModel() { var mainModel = MainModel.Instance; } // Protected constructor for unit testing and to prevent external instantiation
+    public MainModel MainModel => field ??= MainModel.Instance;
 
-    public CounterViewModel CounterViewModel  => field ??= new CounterViewModel();
+
+    protected internal MainViewModel() { }
+
+
     public DashboardViewModel DashboardViewModel => field ??= new DashboardViewModel();
 
     public void Dispose() {
-        // Cascade the disposal down to the child ViewModel
         DashboardViewModel?.Dispose();
         GC.SuppressFinalize(this);
     }

@@ -14,7 +14,6 @@ public class TemplateLocator : DataTemplateSelector {
     // The public parameterless constructor required by XAML
     public TemplateLocator() {
         // Register individual View/ViewModel mappings here
-        RegisterMapping<CounterViewModel, CounterView>();
         RegisterMapping<DashboardViewModel, DashboardView>();
 
         // Add future mappings here...
