@@ -5,164 +5,76 @@
              xmlns:views="clr-namespace:XpEng.Coder03.Views.Views"
              HorizontalContentAlignment="Stretch">
 
-    <Border Background="White"
-            BorderBrush="#D1D5DB"
-            BorderThickness="1"
-            Margin="0,0,8,8"
-            Padding="8"
-            HorizontalAlignment="Stretch">
+    <Border Background="White" BorderBrush="#D1D5DB" BorderThickness="1"
+            Margin="0,0,8,8" Padding="8" HorizontalAlignment="Stretch">
 
         <StackPanel HorizontalAlignment="Stretch">
 
-            <!-- Header -->
+            <!-- Card header -->
             <Grid Margin="0,0,0,6">
-
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <CheckBox
-                    Grid.Column="0"
-                    Content="Monitored"
-                    IsChecked="{Binding IsMonitored}"
-                    IsEnabled="{Binding CanBeMonitored}"
-                    VerticalAlignment="Center"
-                    FontWeight="SemiBold">
-
+                <CheckBox Grid.Column="0" Content="Monitored" IsChecked="{Binding IsMonitored}"
+                          IsEnabled="{Binding CanBeMonitored}" VerticalAlignment="Center" FontWeight="SemiBold">
                     <CheckBox.Style>
-
-                        <Style
-                            TargetType="CheckBox"
-                            BasedOn="{StaticResource MonitoredAwareCheckBoxStyle}">
-
+                        <Style TargetType="CheckBox" BasedOn="{StaticResource MonitoredAwareCheckBoxStyle}">
                             <Style.Triggers>
-
-                                <DataTrigger
-                                    Binding="{Binding CanBeMonitored}"
-                                    Value="False">
-
-                                    <Setter
-                                        Property="ToolTip"
-                                        Value="{Binding MonitoringDisabledReason}"/>
-
+                                <DataTrigger Binding="{Binding CanBeMonitored}" Value="False">
+                                    <Setter Property="ToolTip" Value="{Binding MonitoringDisabledReason}"/>
                                 </DataTrigger>
-
                             </Style.Triggers>
                         </Style>
-
                     </CheckBox.Style>
-
                 </CheckBox>
 
-
-                <Button
-                    Grid.Column="1"
-                    Content=" &#10060; "
-                    Command="{Binding DataContext.DeleteTargetTemplateCommand,
-                                      RelativeSource={RelativeSource AncestorType={x:Type views:DashboardView}}}"
-                    CommandParameter="{Binding}"
-                    Foreground="DarkRed"
-                    FontWeight="Bold"
-                    Background="Transparent"
-                    BorderThickness="0"
-                    ToolTip="Delete Target/Template"
-                    VerticalAlignment="Center"/>
-
+                <Button Grid.Column="1" Content=" &#10060; "
+                        Command="{Binding DataContext.DeleteTargetTemplateCommand,
+                            RelativeSource={RelativeSource AncestorType={x:Type views:DashboardView}}}"
+                        CommandParameter="{Binding}" Foreground="DarkRed" FontWeight="Bold"
+                        Background="Transparent" BorderThickness="0"
+                        ToolTip="Delete Target/Template" VerticalAlignment="Center"/>
             </Grid>
 
+            <!-- Keep label beside editor while a useful editor width still fits. -->
+            <controls:AdaptivePanel Margin="0,0,0,6">
+                <TextBlock Text="Target Directory:" Width="110" FontWeight="Bold" VerticalAlignment="Center"/>
 
-            <!-- Target Directory -->
-            <controls:AdaptivePanel
-                Margin="0,0,0,8"
-                HorizontalAlignment="Stretch">
-
-                <TextBlock
-                    Text="Target Directory:"
-                    Width="110"
-                    FontWeight="Bold"
-                    VerticalAlignment="Center"/>
-
-
-                <Grid
-                    VerticalAlignment="Center"
-                    HorizontalAlignment="Stretch">
-
+                <Grid MinWidth="320" VerticalAlignment="Center">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
+                    <controls:SmartPathTextBox x:Name="TargetTextBox" Grid.Column="0"
+                                               FullPath="{Binding TargetDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                               HorizontalAlignment="Stretch" VerticalAlignment="Center" Padding="4,2"/>
 
-                    <controls:SmartPathTextBox
-                        x:Name="TargetTextBox"
-                        Grid.Column="0"
-                        FullPath="{Binding TargetDirectory,
-                                           Mode=TwoWay,
-                                           UpdateSourceTrigger=PropertyChanged}"
-                        HorizontalAlignment="Stretch"
-                        VerticalAlignment="Center"
-                        Padding="4,2"/>
-
-
-                    <Button
-                        Grid.Column="1"
-                        Margin="4,0,0,0"
-                        Click="BrowseTargetDirectory_Click"
-                        ToolTip="Select Target Output Directory"
-                        Style="{StaticResource BrowseButtonStyle}"/>
-
+                    <Button Grid.Column="1" Click="BrowseTargetDirectory_Click"
+                            ToolTip="Select Target Output Directory" Style="{StaticResource BrowseButtonStyle}"/>
                 </Grid>
-
             </controls:AdaptivePanel>
 
+            <controls:AdaptivePanel Margin="0,0,0,2">
+                <TextBlock Text="Template:" Width="110" FontWeight="Bold" VerticalAlignment="Center"/>
 
-            <!-- Template -->
-            <controls:AdaptivePanel
-                Margin="0,0,0,8"
-                HorizontalAlignment="Stretch">
-
-                <TextBlock
-                    Text="Template:"
-                    Width="110"
-                    FontWeight="Bold"
-                    VerticalAlignment="Center"/>
-
-
-                <Grid
-                    VerticalAlignment="Center"
-                    HorizontalAlignment="Stretch">
-
+                <Grid MinWidth="320" VerticalAlignment="Center">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
+                    <controls:SmartPathTextBox x:Name="TemplateTextBox" Grid.Column="0"
+                                               FullPath="{Binding TemplatePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                               HorizontalAlignment="Stretch" VerticalAlignment="Center" Padding="4,2"/>
 
-                    <controls:SmartPathTextBox
-                        x:Name="TemplateTextBox"
-                        Grid.Column="0"
-                        FullPath="{Binding TemplatePath,
-                                           Mode=TwoWay,
-                                           UpdateSourceTrigger=PropertyChanged}"
-                        HorizontalAlignment="Stretch"
-                        VerticalAlignment="Center"
-                        Padding="4,2"/>
-
-
-                    <Button
-                        Grid.Column="1"
-                        Margin="4,0,0,0"
-                        Click="BrowseTemplate_Click"
-                        ToolTip="Select T4 Template File"
-                        Style="{StaticResource BrowseButtonStyle}"/>
-
+                    <Button Grid.Column="1" Click="BrowseTemplate_Click"
+                            ToolTip="Select T4 Template File" Style="{StaticResource BrowseButtonStyle}"/>
                 </Grid>
-
             </controls:AdaptivePanel>
 
         </StackPanel>
-
     </Border>
-
 </UserControl>

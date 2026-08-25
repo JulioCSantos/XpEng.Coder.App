@@ -1,7 +1,20 @@
-﻿namespace XpEng.Coder03.Views.Controls;
+﻿namespace XpEng.Coder03.Views.Controls {
+    /// <summary>
+    /// Centralized tuning values for the responsive Target/Template card layout.
+    /// These values express UI preferences rather than path-specific requirements.
+    /// </summary>
+    public static class CardSizingDefaults {
+        // A card may shrink this far when the window requires it.
+        public const double MinCardWidth = 250;
 
-internal static class CardSizingDefaults {
-    public const double MinCardWidth = 240;
-    public const double MinTextWidthWhenEmpty = MinCardWidth * 0.6;
-    public const double CardChromeOverhead = 60;
+        // Prefer this much room per card before adding another column.
+        // Increasing this favors fewer/wider cards; decreasing it favors more columns.
+        public const double PreferredCardWidth = 320;
+
+        // Maximum density even on very wide displays.
+        public const int MaxColumns = 2;
+
+        //// Minimum useful editor area before AdaptivePanel moves it below its label.
+        //public const double MinEditorWidth = 320;
+    }
 }
