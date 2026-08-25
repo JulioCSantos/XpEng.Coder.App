@@ -1,17 +1,82 @@
-﻿using System.Windows.Controls;
-using XpEng.Coder03.Views.Controls;
+﻿using Microsoft.Win32;
+using System.IO;
+using System.Windows;
+using System.Windows.Controls;
 
-namespace XpEng.Coder03.Views.Views;
+namespace XpEng.Coder03.Views.Views {
+    public partial class TargetTemplateItemView : UserControl {
+        public TargetTemplateItemView() {
+            InitializeComponent();
+        }
 
-public partial class TargetTemplateItemView : UserControl {
-    public TargetTemplateItemView() { InitializeComponent(); }
 
-    // Card's own required width: whichever of its two paths needs more room, plus a fixed
-    // allowance for chrome (border padding, the "..." button column) that measurement can't
-    // capture directly. Approximate by design — good enough to avoid truncating real content
-    // without needing to hand-measure every pixel of the card's layout.
-    public double MeasureRequiredCardWidth() {
-        double textWidth = Math.Max(TargetPicker.MeasureDisplayTextWidth(), TemplatePicker.MeasureDisplayTextWidth());
-        return Math.Max(textWidth + CardSizingDefaults.CardChromeOverhead, CardSizingDefaults.MinCardWidth);
+        private void BrowseTargetDirectory_Click(
+            object sender,
+            RoutedEventArgs e) {
+
+            var dialog =
+                new OpenFolderDialog {
+                    Title = "Select Target Output Directory"
+                };
+
+            var vm = DataContext as dynamic;
+
+            if (vm != null &&
+                !string.IsNullOrWhiteSpace(vm.TargetDirectory) &&
+                Directory.Exists(vm.TargetDirectory)) {
+
+                dialog.InitialDirectory =
+                    vm.TargetDirectory;
+            }
+
+            if (dialog.ShowDialog() == true &&
+                vm != null) {
+
+                vm.TargetDirectory =
+                    dialog.FolderName;
+            }
+        }
+
+
+        private void BrowseTemplate_Click(
+            object sender,
+            RoutedEventArgs e) {
+
+            var dialog =
+                new OpenFileDialog {
+                    Title = "Select T4 Template File",
+                    Filter =
+                        "T4 Templates (*.tt)|*.tt|" +
+                        "All Files (*.*)|*.*"
+                };
+
+            var vm = DataContext as dynamic;
+
+            if (vm != null &&
+                !string.IsNullOrWhiteSpace(vm.TemplatePath)) {
+
+                string? directory =
+                    Path.GetDirectoryName(
+                        (string)vm.TemplatePath);
+
+                if (!string.IsNullOrWhiteSpace(directory) &&
+                    Directory.Exists(directory)) {
+
+                    dialog.InitialDirectory =
+                        directory;
+
+                    dialog.FileName =
+                        Path.GetFileName(
+                            (string)vm.TemplatePath);
+                }
+            }
+
+            if (dialog.ShowDialog() == true &&
+                vm != null) {
+
+                vm.TemplatePath =
+                    dialog.FileName;
+            }
+        }
     }
 }

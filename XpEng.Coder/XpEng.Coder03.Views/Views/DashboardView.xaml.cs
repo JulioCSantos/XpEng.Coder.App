@@ -1,5 +1,5 @@
 ﻿using Microsoft.Win32;
-using System.Collections.Specialized;
+using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -10,158 +10,284 @@ using XpEng.Coder09.Models.Transport;
 
 namespace XpEng.Coder03.Views.Views {
     public partial class DashboardView : UserControl {
-
         private const int MaxCardColumns = 3;
 
         #region Properties
+
         private readonly DashboardViewModel VM;
+
         #endregion Properties
 
+
         #region Constructors
+
         public DashboardView() {
             InitializeComponent();
-            VM = (this.DataContext as DashboardViewModel)!;
 
-            // Listen for the ViewModel's request to touch the clipboard
-            VM.CopyToClipboardRequested += OnCopyToClipboardRequested!;
+            VM =
+                (DataContext as DashboardViewModel)!;
+
+            VM.CopyToClipboardRequested +=
+                OnCopyToClipboardRequested!;
         }
+
         #endregion Constructors
 
+
         #region Event Handlers & Methods
-        private void BrowseSetupSolutionFile_Click(object sender, RoutedEventArgs e) {
-            if ((sender as FrameworkElement)?.DataContext is PlanOrchestratorPoco poco) {
-                var dialog = new OpenFileDialog {
+
+        private void BrowseSetupSolutionFile_Click(
+            object sender,
+            RoutedEventArgs e) {
+
+            if ((sender as FrameworkElement)?.DataContext
+                is not PlanOrchestratorPoco poco) {
+
+                return;
+            }
+
+            var dialog =
+                new OpenFileDialog {
                     Title = "Select Solution File",
-                    Filter = "Visual Studio Solution (*.sln;*.slnx)|*.sln;*.slnx|All Files (*.*)|*.*"
+                    Filter =
+                        "Visual Studio Solution (*.sln;*.slnx)|" +
+                        "*.sln;*.slnx|" +
+                        "All Files (*.*)|*.*"
                 };
-                if (!string.IsNullOrWhiteSpace(poco.SetupSolutionFile)) {
-                    var dir = Path.GetDirectoryName(poco.SetupSolutionFile);
-                    if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir)) {
-                        dialog.InitialDirectory = dir;
-                        dialog.FileName = Path.GetFileName(poco.SetupSolutionFile);
-                    }
-                }
-                if (dialog.ShowDialog() == true) {
-                    poco.SetupSolutionFile = dialog.FileName;
-                }
-            }
-        }
 
-        private void BrowseSetupTemplate_Click(object sender, RoutedEventArgs e) {
-            if ((sender as FrameworkElement)?.DataContext is PlanOrchestratorPoco poco) {
-                var dialog = new OpenFileDialog {
-                    Title = "Select Setup Template File",
-                    Filter = "T4 Templates (*.tt)|*.tt|All Files (*.*)|*.*"
-                };
-                if (!string.IsNullOrWhiteSpace(poco.SetupTemplatePath)) {
-                    var dir = Path.GetDirectoryName(poco.SetupTemplatePath);
-                    if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir)) {
-                        dialog.InitialDirectory = dir;
-                        dialog.FileName = Path.GetFileName(poco.SetupTemplatePath);
-                    }
+            if (!string.IsNullOrWhiteSpace(
+                    poco.SetupSolutionFile)) {
+
+                var directory =
+                    Path.GetDirectoryName(
+                        poco.SetupSolutionFile);
+
+                if (!string.IsNullOrWhiteSpace(directory) &&
+                    Directory.Exists(directory)) {
+
+                    dialog.InitialDirectory =
+                        directory;
+
+                    dialog.FileName =
+                        Path.GetFileName(
+                            poco.SetupSolutionFile);
                 }
-                if (dialog.ShowDialog() == true) {
-                    poco.SetupTemplatePath = dialog.FileName;
-                }
-            }
-        }
-
-        // SourceDirectory (top of the tree): no ancestor default, browse from wherever it currently points.
-        private void BrowseSource_Click(object sender, RoutedEventArgs e) {
-            if ((sender as FrameworkElement)?.DataContext is SourceDirectoryPoco poco) {
-                SelectDirectory("Select Source Directory (Monitored)", poco.SourceDirectory, path => {
-                    poco.SourceDirectory = path;
-                });
-            }
-        }
-
-        private void SelectDirectory(string title, string currentPath, System.Action<string> onFolderSelected) {
-            var dialog = new OpenFolderDialog {
-                Title = title
-            };
-
-            if (!string.IsNullOrWhiteSpace(currentPath) && Directory.Exists(currentPath)) {
-                dialog.InitialDirectory = currentPath;
             }
 
             if (dialog.ShowDialog() == true) {
-                onFolderSelected(dialog.FolderName);
+                poco.SetupSolutionFile =
+                    dialog.FileName;
             }
         }
 
-        // Wires up reactivity for a TargetTemplates ListBox on first load: reacts to items being
-        // added/removed, and to each item's own display text changing (typing, or picking a new
-        // path via the dialog on an existing card) — not just window resize.
-        private void TargetTemplatesListBox_Loaded(object sender, RoutedEventArgs e) {
-            if (sender is not ListBox listBox) return;
 
-            if (listBox.ItemsSource is INotifyCollectionChanged incc) {
-                incc.CollectionChanged += (_, args) => {
-                    if (args.NewItems != null) {
-                        foreach (TargetTemplatePoco poco in args.NewItems) SubscribeToPocoWidthChanges(poco, listBox);
-                    }
-                    RefreshCardWidth(listBox);
+        private void BrowseSetupTemplate_Click(
+            object sender,
+            RoutedEventArgs e) {
+
+            if ((sender as FrameworkElement)?.DataContext
+                is not PlanOrchestratorPoco poco) {
+
+                return;
+            }
+
+            var dialog =
+                new OpenFileDialog {
+                    Title = "Select Setup Template File",
+                    Filter =
+                        "T4 Templates (*.tt)|*.tt|" +
+                        "All Files (*.*)|*.*"
                 };
-            }
-            if (listBox.ItemsSource is System.Collections.Generic.IEnumerable<TargetTemplatePoco> items) {
-                foreach (var poco in items) SubscribeToPocoWidthChanges(poco, listBox);
-            }
 
-            RefreshCardWidth(listBox);
-        }
+            if (!string.IsNullOrWhiteSpace(
+                    poco.SetupTemplatePath)) {
 
-        private void SubscribeToPocoWidthChanges(TargetTemplatePoco poco, ListBox listBox) {
-            poco.PropertyChanged += (_, args) => {
-                if (args.PropertyName is nameof(TargetTemplatePoco.TargetDirectoryDisplay) or nameof(TargetTemplatePoco.TemplatePathDisplay)) {
-                    RefreshCardWidth(listBox);
+                var directory =
+                    Path.GetDirectoryName(
+                        poco.SetupTemplatePath);
+
+                if (!string.IsNullOrWhiteSpace(directory) &&
+                    Directory.Exists(directory)) {
+
+                    dialog.InitialDirectory =
+                        directory;
+
+                    dialog.FileName =
+                        Path.GetFileName(
+                            poco.SetupTemplatePath);
                 }
-            };
+            }
+
+            if (dialog.ShowDialog() == true) {
+                poco.SetupTemplatePath =
+                    dialog.FileName;
+            }
         }
 
-        private void TargetTemplatesListBox_SizeChanged(object sender, SizeChangedEventArgs e) {
-            RefreshCardWidth(sender as ListBox);
+
+        private void BrowseSource_Click(
+            object sender,
+            RoutedEventArgs e) {
+
+            if ((sender as FrameworkElement)?.DataContext
+                is not SourceDirectoryPoco poco) {
+
+                return;
+            }
+
+            SelectDirectory(
+                "Select Source Directory (Monitored)",
+                poco.SourceDirectory,
+                path => poco.SourceDirectory = path);
         }
+
+
+        private void SelectDirectory(
+            string title,
+            string currentPath,
+            Action<string> onFolderSelected) {
+
+            var dialog =
+                new OpenFolderDialog {
+                    Title = title
+                };
+
+            if (!string.IsNullOrWhiteSpace(currentPath) &&
+                Directory.Exists(currentPath)) {
+
+                dialog.InitialDirectory =
+                    currentPath;
+            }
+
+            if (dialog.ShowDialog() == true) {
+                onFolderSelected(
+                    dialog.FolderName);
+            }
+        }
+
+
+        /*
+         * A card's width is now determined only by:
+         *
+         * 1. available ListBox width,
+         * 2. minimum usable card width,
+         * 3. maximum number of columns.
+         *
+         * Path length deliberately plays no role.
+         *
+         * SmartPathTextBox adapts the displayed path after it
+         * receives the resulting width.
+         */
+        private void TargetTemplatesListBox_Loaded(
+            object sender,
+            RoutedEventArgs e) {
+
+            RefreshCardWidth(
+                sender as ListBox);
+        }
+
+
+        private void TargetTemplatesListBox_SizeChanged(
+            object sender,
+            SizeChangedEventArgs e) {
+
+            RefreshCardWidth(
+                sender as ListBox);
+        }
+
 
         private void RefreshCardWidth(ListBox? listBox) {
-            if (listBox == null) return;
-            Dispatcher.BeginInvoke(new Action(() => 
-                RefreshCardWidthCore(listBox)), System.Windows.Threading.DispatcherPriority.Background);
+            if (listBox == null)
+                return;
+
+            Dispatcher.BeginInvoke(
+                new Action(
+                    () => RefreshCardWidthCore(listBox)),
+                System.Windows.Threading
+                    .DispatcherPriority.Background);
         }
+
 
         private void RefreshCardWidthCore(ListBox listBox) {
-            if (listBox.Tag is not WrapPanel wrapPanel) {
-                wrapPanel = FindVisualChild<WrapPanel>(listBox)!;
-                listBox.Tag = wrapPanel;
+            if (listBox.ActualWidth <= 0)
+                return;
+
+            WrapPanel? wrapPanel =
+                listBox.Tag as WrapPanel;
+
+            if (wrapPanel == null) {
+                wrapPanel =
+                    FindVisualChild<WrapPanel>(
+                        listBox);
+
+                if (wrapPanel == null)
+                    return;
+
+                listBox.Tag =
+                    wrapPanel;
             }
-            double minWidth = MeasureMaxRequiredCardWidth(listBox);
-            wrapPanel.ItemWidth = ResponsiveGridCalculator.CalculateItemWidth(listBox.ActualWidth, minWidth, MaxCardColumns);
-        }
-        // Every card in a WrapPanel with ItemWidth set shares one uniform width, so the value
-        // used has to be the widest real requirement across all currently-rendered cards —
-        // not an arbitrary constant.
-        private double MeasureMaxRequiredCardWidth(ListBox listBox) {
-            double max = 0;
-            foreach (var item in listBox.Items) {
-                if (listBox.ItemContainerGenerator.ContainerFromItem(item) is not DependencyObject container) continue;
-                var cardView = FindVisualChild<TargetTemplateItemView>(container);
-                if (cardView != null) max = Math.Max(max, cardView.MeasureRequiredCardWidth());
+
+            /*
+             * This is the important difference from the old version.
+             *
+             * Do NOT measure TargetDirectory or TemplatePath.
+             */
+            double itemWidth =
+                ResponsiveGridCalculator.CalculateItemWidth(
+                    listBox.ActualWidth,
+                    CardSizingDefaults.MinCardWidth,
+                    MaxCardColumns);
+
+            if (double.IsNaN(itemWidth) ||
+                double.IsInfinity(itemWidth) ||
+                itemWidth <= 0) {
+
+                return;
             }
-            return max;
+
+            wrapPanel.ItemWidth =
+                itemWidth;
         }
 
-        private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject {
-            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++) {
-                var child = VisualTreeHelper.GetChild(parent, i);
-                if (child is T match) return match;
-                var found = FindVisualChild<T>(child);
-                if (found != null) return found;
+
+        private static T? FindVisualChild<T>(
+            DependencyObject parent)
+            where T : DependencyObject {
+
+            int childCount =
+                VisualTreeHelper
+                    .GetChildrenCount(parent);
+
+            for (int i = 0;
+                 i < childCount;
+                 i++) {
+
+                DependencyObject child =
+                    VisualTreeHelper
+                        .GetChild(parent, i);
+
+                if (child is T match)
+                    return match;
+
+                T? found =
+                    FindVisualChild<T>(child);
+
+                if (found != null)
+                    return found;
             }
+
             return null;
         }
 
-        private void OnCopyToClipboardRequested(object sender, string textToCopy) {
-            Clipboard.SetText(textToCopy);
+
+        private void OnCopyToClipboardRequested(
+            object sender,
+            string textToCopy) {
+
+            Clipboard.SetText(
+                textToCopy);
         }
+
         #endregion Event Handlers & Methods
     }
 }

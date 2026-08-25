@@ -1,95 +1,138 @@
-﻿using System.Windows;
+﻿using System;
+using System.Collections.Generic;
+using System.Windows;
 using System.Windows.Controls;
 
 namespace XpEng.Coder03.Views.Controls {
     public class AdaptivePanel : Panel {
+        private const double Spacing = 5;
+
         protected override Size MeasureOverride(Size availableSize) {
-            double spacing = 5;
-            double currentX = 0;
-            double currentY = 0;
-            double maxRowHeight = 0;
+            double availableWidth = availableSize.Width;
+
+            double rowWidth = 0;
+            double rowHeight = 0;
             double totalWidth = 0;
+            double totalHeight = 0;
 
             foreach (UIElement child in InternalChildren) {
-                child.Measure(new Size(availableSize.Width, availableSize.Height));
-                Size childSize = child.DesiredSize;
+                child.Measure(new Size(
+                    double.IsInfinity(availableWidth)
+                        ? double.PositiveInfinity
+                        : availableWidth,
+                    availableSize.Height));
 
-                if (currentX > 0 && currentX + childSize.Width > availableSize.Width) {
-                    totalWidth = Math.Max(totalWidth, currentX - spacing);
-                    currentY += maxRowHeight + spacing;
-                    currentX = 0;
-                    maxRowHeight = 0;
+                Size desired = child.DesiredSize;
+
+                bool wrap =
+                    rowWidth > 0 &&
+                    !double.IsInfinity(availableWidth) &&
+                    rowWidth + Spacing + desired.Width > availableWidth;
+
+                if (wrap) {
+                    totalWidth = Math.Max(totalWidth, rowWidth);
+                    totalHeight += rowHeight + Spacing;
+
+                    rowWidth = 0;
+                    rowHeight = 0;
                 }
 
-                currentX += childSize.Width + spacing;
-                maxRowHeight = Math.Max(maxRowHeight, childSize.Height);
+                if (rowWidth > 0)
+                    rowWidth += Spacing;
+
+                rowWidth += desired.Width;
+                rowHeight = Math.Max(rowHeight, desired.Height);
             }
 
-            totalWidth = Math.Max(totalWidth, currentX > 0 ? currentX - spacing : 0);
-            double totalHeight = currentY + maxRowHeight;
+            totalWidth = Math.Max(totalWidth, rowWidth);
+            totalHeight += rowHeight;
 
-            return new Size(Math.Min(availableSize.Width, totalWidth), totalHeight);
+            if (!double.IsInfinity(availableWidth))
+                totalWidth = Math.Min(totalWidth, availableWidth);
+
+            return new Size(totalWidth, totalHeight);
         }
 
         protected override Size ArrangeOverride(Size finalSize) {
-            double spacing = 5;
-            double currentX = 0;
             double currentY = 0;
-            double maxRowHeight = 0;
 
-            List<UIElement> currentRowElements = new List<UIElement>();
-            List<Size> currentRowSizes = new List<Size>();
+            var row = new List<UIElement>();
+            double rowDesiredWidth = 0;
+            double rowHeight = 0;
 
-            void ArrangeCurrentRow() {
-                if (currentRowElements.Count == 0) return;
+            void ArrangeRow() {
+                if (row.Count == 0)
+                    return;
 
                 double x = 0;
-                for (int i = 0; i < currentRowElements.Count; i++) {
-                    var child = currentRowElements[i];
-                    var size = currentRowSizes[i];
 
-                    // Respect FrameworkElement MaxWidth constraints during layout arrangement
-                    double finalChildWidth = size.Width;
-                    if (child is FrameworkElement fe && !double.IsNaN(fe.MaxWidth)) {
-                        finalChildWidth = Math.Min(finalChildWidth, fe.MaxWidth);
+                foreach (UIElement child in row) {
+                    if (x > 0)
+                        x += Spacing;
+
+                    double availableWidth =
+                        Math.Max(0, finalSize.Width - x);
+
+                    double width =
+                        Math.Min(child.DesiredSize.Width, availableWidth);
+
+                    if (child is FrameworkElement fe) {
+                        width = Math.Min(width, fe.MaxWidth);
+
+                        if (availableWidth >= fe.MinWidth)
+                            width = Math.Max(width, fe.MinWidth);
                     }
 
-                    // If it's the last item on a single line and we have extra space, 
-                    // ensure we don't force a Grid/FrameworkElement past its MaxWidth if it's set.
-                    if (currentRowElements.Count == 2 && i == 1) {
-                        if (child is FrameworkElement innerFe && !double.IsNaN(innerFe.MaxWidth)) {
-                            finalChildWidth = Math.Min(finalSize.Width - x, innerFe.MaxWidth);
-                        }
-                    }
+                    double height = child.DesiredSize.Height;
 
-                    double y = currentY + (maxRowHeight - size.Height) / 2;
-                    child.Arrange(new Rect(x, y, finalChildWidth, size.Height));
+                    double y =
+                        currentY +
+                        Math.Max(0, (rowHeight - height) / 2);
 
-                    x += finalChildWidth + spacing;
+                    child.Arrange(
+                        new Rect(
+                            x,
+                            y,
+                            width,
+                            height));
+
+                    x += width;
                 }
 
-                currentY += maxRowHeight + spacing;
-                currentX = 0;
-                maxRowHeight = 0;
-                currentRowElements.Clear();
-                currentRowSizes.Clear();
+                currentY += rowHeight + Spacing;
+
+                row.Clear();
+                rowDesiredWidth = 0;
+                rowHeight = 0;
             }
 
             foreach (UIElement child in InternalChildren) {
-                Size childSize = child.DesiredSize;
+                double childWidth = child.DesiredSize.Width;
 
-                if (currentX > 0 && currentX + childSize.Width > finalSize.Width) {
-                    ArrangeCurrentRow();
+                double proposedWidth =
+                    row.Count == 0
+                        ? childWidth
+                        : rowDesiredWidth + Spacing + childWidth;
+
+                if (row.Count > 0 &&
+                    proposedWidth > finalSize.Width) {
+
+                    ArrangeRow();
                 }
 
-                currentRowElements.Add(child);
-                currentRowSizes.Add(childSize);
+                if (row.Count > 0)
+                    rowDesiredWidth += Spacing;
 
-                currentX += childSize.Width + spacing;
-                maxRowHeight = Math.Max(maxRowHeight, childSize.Height);
+                row.Add(child);
+                rowDesiredWidth += childWidth;
+
+                rowHeight =
+                    Math.Max(
+                        rowHeight,
+                        child.DesiredSize.Height);
             }
 
-            ArrangeCurrentRow();
+            ArrangeRow();
 
             return finalSize;
         }
