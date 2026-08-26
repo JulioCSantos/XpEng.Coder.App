@@ -1,0 +1,68 @@
+﻿<UserControl x:Class="XpEng.Coder03.Views.Views.SourceDirectoryItemView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:XpEng.Coder03.Views.Views"
+             xmlns:controls="clr-namespace:XpEng.Coder03.Views.Controls"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800">
+    <Border BorderBrush="#E5E7EB" BorderThickness="0,0,0,1" Padding="0,0,0,10" Margin="0,0,0,10">
+        <StackPanel>
+
+            <Grid Margin="0,0,0,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="Source:" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,5,0" Style="{StaticResource MonitoredAwareTextBlockStyle}"/>
+                <!-- SourceDirectory is exempt from shortening: full path, plain TextBox, no overlay -->
+                <TextBox Grid.Column="1" Text="{Binding SourceDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}" 
+                                                                             ToolTip="Source Directory (monitored)" VerticalAlignment="Center" Padding="4,2" Style="{StaticResource MonitoredAwareTextBoxStyle}"/>
+                <Button Grid.Column="2" Content="..." Click="BrowseSource_Click" Padding="6,0" MinWidth="24" Margin="4,0,8,0" FontSize="11" ToolTip="Select Source Directory (Monitored)" VerticalAlignment="Center"/>
+
+                <Button Grid.Column="3" Content=" &#10060; " 
+                                                                            Command="{Binding DataContext.DeleteSourceDirectoryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
+                                                                            CommandParameter="{Binding}" 
+                                                                            Foreground="DarkRed" FontWeight="Bold" Background="Transparent" BorderThickness="0"
+                                                                            ToolTip="Delete Source Directory" VerticalAlignment="Center"/>
+            </Grid>
+
+            <!-- TARGET/TEMPLATE LEVEL: WrapPanel of TargetTemplateItemView cards -->
+            <Border Margin="30,0,0,0" Background="#F9FAFB" BorderBrush="#E5E7EB" BorderThickness="1" Padding="10">
+                <StackPanel>
+                    <TextBlock Text="Target Directories &amp; Templates" FontWeight="SemiBold" Foreground="#6B7280" Margin="0,0,0,6"/>
+
+                    <controls:ColumnListBox ItemsSource="{Binding TargetTemplates}"
+                                                                                MaxColumns="3" MinItemWidth="250" PreferredItemWidth="350"
+                                                                                BorderThickness="0" Background="Transparent"
+                                                                                ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                                                                ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <local:TargetTemplateItemView/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Focusable" Value="False"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                    </controls:ColumnListBox>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </Border>
+</UserControl>
