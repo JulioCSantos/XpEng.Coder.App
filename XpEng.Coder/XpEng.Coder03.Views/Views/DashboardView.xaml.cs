@@ -26,46 +26,6 @@ namespace XpEng.Coder03.Views.Views {
         #endregion Constructors
 
         #region Event Handlers & Methods
-        private void BrowseSetupSolutionFile_Click(object sender, RoutedEventArgs e) {
-            if ((sender as FrameworkElement)?.DataContext is not PlanOrchestratorPoco poco) return;
-
-            var dialog = new OpenFileDialog {
-                Title = "Select Solution File",
-                Filter = "Visual Studio Solution (*.sln;*.slnx)|*.sln;*.slnx|All Files (*.*)|*.*"
-            };
-
-            if (!string.IsNullOrWhiteSpace(poco.SetupSolutionFile)) {
-                var directory = Path.GetDirectoryName(poco.SetupSolutionFile);
-
-                if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory)) {
-                    dialog.InitialDirectory = directory;
-                    dialog.FileName = Path.GetFileName(poco.SetupSolutionFile);
-                }
-            }
-
-            if (dialog.ShowDialog() == true) poco.SetupSolutionFile = dialog.FileName;
-        }
-
-        private void BrowseSetupTemplate_Click(object sender, RoutedEventArgs e) {
-            if ((sender as FrameworkElement)?.DataContext is not PlanOrchestratorPoco poco) return;
-
-            var dialog = new OpenFileDialog {
-                Title = "Select Setup Template File",
-                Filter = "T4 Templates (*.tt)|*.tt|All Files (*.*)|*.*"
-            };
-
-            if (!string.IsNullOrWhiteSpace(poco.SetupTemplatePath)) {
-                var directory = Path.GetDirectoryName(poco.SetupTemplatePath);
-
-                if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory)) {
-                    dialog.InitialDirectory = directory;
-                    dialog.FileName = Path.GetFileName(poco.SetupTemplatePath);
-                }
-            }
-
-            if (dialog.ShowDialog() == true) poco.SetupTemplatePath = dialog.FileName;
-        }
-
         private void OnCopyToClipboardRequested(object sender, string textToCopy) {
             Clipboard.SetText(textToCopy);
         }
