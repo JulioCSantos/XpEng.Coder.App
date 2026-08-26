@@ -361,3 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/XpEng.Coder/XpEng.Coder03.Views/ColumnListBoxTestWindow.xaml
+/XpEng.Coder/XpEng.Coder03.Views/ColumnListBoxTestWindow.xaml.cs
