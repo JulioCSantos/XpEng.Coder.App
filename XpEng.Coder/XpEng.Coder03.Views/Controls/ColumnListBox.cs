@@ -8,28 +8,19 @@ namespace XpEng.Coder03.Views.Controls {
     /// ListBox that always lays out its items through a WrapPanel and manages
     /// item width to produce a configurable number of responsive columns.
     ///
-    /// Columns is the preferred starting column count.
-    /// MinColumns and MaxColumns define the allowed range.
-    /// MinItemWidth is the actual minimum item width. If the viewport becomes
-    /// narrower, normal ScrollViewer behavior determines whether the content scrolls.
+    /// MinColumns and MaxColumns define the allowed column range.
+    /// PreferredItemWidth determines when another column should be added.
+    /// MinItemWidth defines the actual minimum width of an item. If the viewport
+    /// becomes narrower, normal ScrollViewer behavior determines whether the content scrolls.
     ///
     /// The WrapPanel is intrinsic to this control and is intentionally created internally.
     /// </summary>
     public class ColumnListBox : ListBox {
         #region properties and fields
+
         private double _viewportWidth;
 
-        public static readonly DependencyProperty ColumnsProperty =
-            DependencyProperty.Register(
-                nameof(Columns), typeof(int), typeof(ColumnListBox),
-                new FrameworkPropertyMetadata(1, FrameworkPropertyMetadataOptions.AffectsMeasure, OnLayoutPropertyChanged)
-            );
-
-        public int Columns {
-            get => (int)GetValue(ColumnsProperty);
-            set => SetValue(ColumnsProperty, value);
-        }
-
+        #region MinColumns
         public static readonly DependencyProperty MinColumnsProperty =
             DependencyProperty.Register(
                 nameof(MinColumns), typeof(int), typeof(ColumnListBox),
@@ -40,7 +31,9 @@ namespace XpEng.Coder03.Views.Controls {
             get => (int)GetValue(MinColumnsProperty);
             set => SetValue(MinColumnsProperty, value);
         }
+        #endregion MinColumns
 
+        #region MaxColumns
         public static readonly DependencyProperty MaxColumnsProperty =
             DependencyProperty.Register(
                 nameof(MaxColumns), typeof(int), typeof(ColumnListBox),
@@ -51,7 +44,9 @@ namespace XpEng.Coder03.Views.Controls {
             get => (int)GetValue(MaxColumnsProperty);
             set => SetValue(MaxColumnsProperty, value);
         }
+        #endregion MaxColumns
 
+        #region MinItemWidth
         public static readonly DependencyProperty MinItemWidthProperty =
             DependencyProperty.Register(
                 nameof(MinItemWidth), typeof(double), typeof(ColumnListBox),
@@ -62,13 +57,9 @@ namespace XpEng.Coder03.Views.Controls {
             get => (double)GetValue(MinItemWidthProperty);
             set => SetValue(MinItemWidthProperty, value);
         }
+        #endregion MinItemWidth
 
-        private static readonly DependencyPropertyKey ItemWidthPropertyKey =
-            DependencyProperty.RegisterReadOnly(
-                nameof(ItemWidth), typeof(double), typeof(ColumnListBox),
-                new FrameworkPropertyMetadata(double.NaN, FrameworkPropertyMetadataOptions.AffectsMeasure)
-            );
-
+        #region PreferredItemWidth
         public static readonly DependencyProperty PreferredItemWidthProperty =
             DependencyProperty.Register(
                 nameof(PreferredItemWidth), typeof(double), typeof(ColumnListBox),
@@ -79,10 +70,21 @@ namespace XpEng.Coder03.Views.Controls {
             get => (double)GetValue(PreferredItemWidthProperty);
             set => SetValue(PreferredItemWidthProperty, value);
         }
+        #endregion PreferredItemWidth
+
+        #region ItemWidth
+        private static readonly DependencyPropertyKey ItemWidthPropertyKey =
+            DependencyProperty.RegisterReadOnly(
+                nameof(ItemWidth), typeof(double), typeof(ColumnListBox),
+                new FrameworkPropertyMetadata(double.NaN, FrameworkPropertyMetadataOptions.AffectsMeasure)
+            );
 
         public static readonly DependencyProperty ItemWidthProperty = ItemWidthPropertyKey.DependencyProperty;
-        public double ItemWidth => (double)GetValue(ItemWidthProperty);
 
+        public double ItemWidth => (double)GetValue(ItemWidthProperty);
+        #endregion ItemWidth
+
+        #region PanelWidth
         private static readonly DependencyPropertyKey PanelWidthPropertyKey =
             DependencyProperty.RegisterReadOnly(
                 nameof(PanelWidth), typeof(double), typeof(ColumnListBox),
@@ -90,7 +92,10 @@ namespace XpEng.Coder03.Views.Controls {
             );
 
         public static readonly DependencyProperty PanelWidthProperty = PanelWidthPropertyKey.DependencyProperty;
+
         public double PanelWidth => (double)GetValue(PanelWidthProperty);
+        #endregion PanelWidth
+
         #endregion properties and fields
 
         #region constructors
@@ -143,16 +148,15 @@ namespace XpEng.Coder03.Views.Controls {
 
             int minColumns = Math.Max(1, MinColumns);
             int maxColumns = Math.Max(minColumns, MaxColumns);
-            int columns = Math.Clamp(Columns, minColumns, maxColumns);
 
-            // Reduce until the configured minimum item width can be satisfied.
+            // PreferredItemWidth determines the desired density.
+            int columns = (int)(availableWidth / PreferredItemWidth);
+            columns = Math.Clamp(columns, minColumns, maxColumns);
+
+            // MinItemWidth remains the hard physical constraint.
             while (columns > minColumns && availableWidth / columns < MinItemWidth) columns--;
 
-            // Add columns for as long as every item can still satisfy MinItemWidth.
-            while (columns < maxColumns && availableWidth / (columns + 1) >= PreferredItemWidth) columns++;
-
-            // MinItemWidth is a true minimum. If even MinColumns do not fit,
-            // the panel becomes wider than the viewport and the ScrollViewer may scroll.
+            // If even MinColumns cannot fit, preserve MinItemWidth and allow horizontal scrolling.
             double minimumPanelWidth = columns * MinItemWidth;
             double panelWidth = Math.Max(availableWidth, minimumPanelWidth);
 
@@ -170,6 +174,5 @@ namespace XpEng.Coder03.Views.Controls {
             return ActualWidth - Padding.Left - Padding.Right - BorderThickness.Left - BorderThickness.Right;
         }
         #endregion methods
-
     }
 }
