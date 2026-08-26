@@ -16,6 +16,7 @@ namespace XpEng.Coder03.Views.Controls {
     /// The WrapPanel is intrinsic to this control and is intentionally created internally.
     /// </summary>
     public class ColumnListBox : ListBox {
+        #region properties and fields
         private double _viewportWidth;
 
         public static readonly DependencyProperty ColumnsProperty =
@@ -68,6 +69,17 @@ namespace XpEng.Coder03.Views.Controls {
                 new FrameworkPropertyMetadata(double.NaN, FrameworkPropertyMetadataOptions.AffectsMeasure)
             );
 
+        public static readonly DependencyProperty PreferredItemWidthProperty =
+            DependencyProperty.Register(
+                nameof(PreferredItemWidth), typeof(double), typeof(ColumnListBox),
+                new FrameworkPropertyMetadata(320.0, FrameworkPropertyMetadataOptions.AffectsMeasure, OnLayoutPropertyChanged)
+            );
+
+        public double PreferredItemWidth {
+            get => (double)GetValue(PreferredItemWidthProperty);
+            set => SetValue(PreferredItemWidthProperty, value);
+        }
+
         public static readonly DependencyProperty ItemWidthProperty = ItemWidthPropertyKey.DependencyProperty;
         public double ItemWidth => (double)GetValue(ItemWidthProperty);
 
@@ -79,7 +91,9 @@ namespace XpEng.Coder03.Views.Controls {
 
         public static readonly DependencyProperty PanelWidthProperty = PanelWidthPropertyKey.DependencyProperty;
         public double PanelWidth => (double)GetValue(PanelWidthProperty);
+        #endregion properties and fields
 
+        #region constructors
         public ColumnListBox() {
             ItemsPanel = CreateItemsPanel();
             HorizontalContentAlignment = HorizontalAlignment.Stretch;
@@ -91,7 +105,9 @@ namespace XpEng.Coder03.Views.Controls {
             Loaded += (_, _) => UpdateLayoutWidths();
             SizeChanged += (_, _) => UpdateLayoutWidths();
         }
+        #endregion constructors
 
+        #region methods
         private static ItemsPanelTemplate CreateItemsPanel() {
             var panel = new FrameworkElementFactory(typeof(WrapPanel));
 
@@ -111,7 +127,10 @@ namespace XpEng.Coder03.Views.Controls {
         }
 
         private void OnScrollChanged(object sender, ScrollChangedEventArgs e) {
-            if (e.OriginalSource is not ScrollViewer scrollViewer || scrollViewer.ViewportWidth <= 0) return;
+            if (e.OriginalSource is not ScrollViewer scrollViewer ||
+                !ReferenceEquals(scrollViewer.TemplatedParent, this) ||
+                scrollViewer.ViewportWidth <= 0) return;
+
             if (Math.Abs(_viewportWidth - scrollViewer.ViewportWidth) < .5) return;
 
             _viewportWidth = scrollViewer.ViewportWidth;
@@ -130,14 +149,12 @@ namespace XpEng.Coder03.Views.Controls {
             while (columns > minColumns && availableWidth / columns < MinItemWidth) columns--;
 
             // Add columns for as long as every item can still satisfy MinItemWidth.
-            while (columns < maxColumns && availableWidth / (columns + 1) >= MinItemWidth) columns++;
+            while (columns < maxColumns && availableWidth / (columns + 1) >= PreferredItemWidth) columns++;
 
             // MinItemWidth is a true minimum. If even MinColumns do not fit,
             // the panel becomes wider than the viewport and the ScrollViewer may scroll.
             double minimumPanelWidth = columns * MinItemWidth;
             double panelWidth = Math.Max(availableWidth, minimumPanelWidth);
-            var asdf =this._viewportWidth;
-            System.Diagnostics.Debug.WriteLine($@"{availableWidth} - {asdf} - {panelWidth}"  );
 
             // One pixel protects WrapPanel from rounding an item onto the next row.
             double itemWidth = Math.Floor(panelWidth / columns) - 1;
@@ -152,5 +169,7 @@ namespace XpEng.Coder03.Views.Controls {
             // Initial fallback until the ScrollViewer reports its actual viewport.
             return ActualWidth - Padding.Left - Padding.Right - BorderThickness.Left - BorderThickness.Right;
         }
+        #endregion methods
+
     }
 }

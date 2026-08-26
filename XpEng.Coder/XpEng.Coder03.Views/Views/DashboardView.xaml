@@ -161,12 +161,11 @@
                                                                     <StackPanel>
                                                                         <TextBlock Text="Target Directories &amp; Templates" FontWeight="SemiBold" Foreground="#6B7280" Margin="0,0,0,6"/>
 
-                                                                        <ListBox ItemsSource="{Binding TargetTemplates}" BorderThickness="0" Background="Transparent" HorizontalContentAlignment="Stretch" Loaded="TargetTemplatesListBox_Loaded" SizeChanged="TargetTemplatesListBox_SizeChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
-                                                                            <ListBox.ItemsPanel>
-                                                                                <ItemsPanelTemplate>
-                                                                                    <WrapPanel/>
-                                                                                </ItemsPanelTemplate>
-                                                                            </ListBox.ItemsPanel>
+                                                                        <controls:ColumnListBox ItemsSource="{Binding TargetTemplates}"
+                                                                                MaxColumns="3" MinItemWidth="250" PreferredItemWidth="350"
+                                                                                BorderThickness="0" Background="Transparent"
+                                                                                ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                                                                ScrollViewer.VerticalScrollBarVisibility="Disabled">
                                                                             <ListBox.ItemTemplate>
                                                                                 <DataTemplate>
                                                                                     <views:TargetTemplateItemView/>
@@ -185,7 +184,7 @@
                                                                                     </Setter>
                                                                                 </Style>
                                                                             </ListBox.ItemContainerStyle>
-                                                                        </ListBox>
+                                                                        </controls:ColumnListBox>
                                                                     </StackPanel>
                                                                 </Border>
 

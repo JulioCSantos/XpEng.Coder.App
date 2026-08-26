@@ -3,14 +3,14 @@ using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
-using XpEng.Coder03.Views.Controls;
+//using System.Windows.Media;
+//using XpEng.Coder03.Views.Controls;
 using XpEng.Coder06.ViewModels;
 using XpEng.Coder09.Models.Transport;
 
 namespace XpEng.Coder03.Views.Views {
     public partial class DashboardView : UserControl {
-        private const int MaxCardColumns = 3;
+        //private const int MaxCardColumns = 3;
 
         #region Properties
         private readonly DashboardViewModel VM;
@@ -85,58 +85,58 @@ namespace XpEng.Coder03.Views.Views {
             if (dialog.ShowDialog() == true) onFolderSelected(dialog.FolderName);
         }
 
-        // Card width depends on available space, not on the length of the paths inside the card.
-        private void TargetTemplatesListBox_Loaded(object sender, RoutedEventArgs e) {
-            RefreshCardWidth(sender as ListBox);
-        }
+        //// Card width depends on available space, not on the length of the paths inside the card.
+        //private void TargetTemplatesListBox_Loaded(object sender, RoutedEventArgs e) {
+        //    RefreshCardWidth(sender as ListBox);
+        //}
 
-        private void TargetTemplatesListBox_SizeChanged(object sender, SizeChangedEventArgs e) {
-            RefreshCardWidth(sender as ListBox);
-        }
+        //private void TargetTemplatesListBox_SizeChanged(object sender, SizeChangedEventArgs e) {
+        //    RefreshCardWidth(sender as ListBox);
+        //}
 
-        private void RefreshCardWidth(ListBox? listBox) {
-            if (listBox == null) return;
+        //private void RefreshCardWidth(ListBox? listBox) {
+        //    if (listBox == null) return;
 
-            Dispatcher.BeginInvoke(
-                new Action(() => RefreshCardWidthCore(listBox)),
-                System.Windows.Threading.DispatcherPriority.Background);
-        }
+        //    Dispatcher.BeginInvoke(
+        //        new Action(() => RefreshCardWidthCore(listBox)),
+        //        System.Windows.Threading.DispatcherPriority.Background);
+        //}
 
-        private void RefreshCardWidthCore(ListBox listBox) {
-            if (listBox.ActualWidth <= 0) return;
+        //private void RefreshCardWidthCore(ListBox listBox) {
+        //    if (listBox.ActualWidth <= 0) return;
 
-            WrapPanel? wrapPanel = listBox.Tag as WrapPanel;
+        //    WrapPanel? wrapPanel = listBox.Tag as WrapPanel;
 
-            if (wrapPanel == null) {
-                wrapPanel = FindVisualChild<WrapPanel>(listBox);
-                if (wrapPanel == null) return;
+        //    if (wrapPanel == null) {
+        //        wrapPanel = FindVisualChild<WrapPanel>(listBox);
+        //        if (wrapPanel == null) return;
 
-                listBox.Tag = wrapPanel;
-            }
+        //        listBox.Tag = wrapPanel;
+        //    }
 
-            double itemWidth = ResponsiveGridCalculator.CalculateItemWidth(
-                listBox.ActualWidth,
-                CardSizingDefaults.MinCardWidth,
-                CardSizingDefaults.PreferredCardWidth,
-                CardSizingDefaults.MaxColumns);
+        //    double itemWidth = ResponsiveGridCalculator.CalculateItemWidth(
+        //        listBox.ActualWidth,
+        //        CardSizingDefaults.MinCardWidth,
+        //        CardSizingDefaults.PreferredCardWidth,
+        //        CardSizingDefaults.MaxColumns);
 
-            if (double.IsNaN(itemWidth) || double.IsInfinity(itemWidth) || itemWidth <= 0) return;
+        //    if (double.IsNaN(itemWidth) || double.IsInfinity(itemWidth) || itemWidth <= 0) return;
 
-            wrapPanel.ItemWidth = itemWidth;
-        }
+        //    wrapPanel.ItemWidth = itemWidth;
+        //}
 
-        private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject {
-            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++) {
-                DependencyObject child = VisualTreeHelper.GetChild(parent, i);
+        //private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject {
+        //    for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++) {
+        //        DependencyObject child = VisualTreeHelper.GetChild(parent, i);
 
-                if (child is T match) return match;
+        //        if (child is T match) return match;
 
-                T? found = FindVisualChild<T>(child);
-                if (found != null) return found;
-            }
+        //        T? found = FindVisualChild<T>(child);
+        //        if (found != null) return found;
+        //    }
 
-            return null;
-        }
+        //    return null;
+        //}
 
         private void OnCopyToClipboardRequested(object sender, string textToCopy) {
             Clipboard.SetText(textToCopy);
