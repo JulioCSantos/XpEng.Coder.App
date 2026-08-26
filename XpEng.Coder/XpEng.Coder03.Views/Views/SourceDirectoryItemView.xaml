@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
              xmlns:local="clr-namespace:XpEng.Coder03.Views.Views"
+             xmlns:viewModels="clr-namespace:XpEng.Coder06.ViewModels;assembly=XpEng.Coder06.ViewModels"
              xmlns:controls="clr-namespace:XpEng.Coder03.Views.Controls"
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800">
@@ -25,10 +26,10 @@
                 <Button Grid.Column="2" Content="..." Click="BrowseSource_Click" Padding="6,0" MinWidth="24" Margin="4,0,8,0" FontSize="11" ToolTip="Select Source Directory (Monitored)" VerticalAlignment="Center"/>
 
                 <Button Grid.Column="3" Content=" &#10060; " 
-                                                                            Command="{Binding DataContext.DeleteSourceDirectoryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" 
-                                                                            CommandParameter="{Binding}" 
-                                                                            Foreground="DarkRed" FontWeight="Bold" Background="Transparent" BorderThickness="0"
-                                                                            ToolTip="Delete Source Directory" VerticalAlignment="Center"/>
+                    Command="{Binding DashboardViewModel.DeleteSourceDirectoryCommand, Source={x:Static viewModels:MainViewModel.Instance}}" 
+                    CommandParameter="{Binding}" 
+                    Foreground="DarkRed" FontWeight="Bold" Background="Transparent" BorderThickness="0"
+                    ToolTip="Delete Source Directory" VerticalAlignment="Center"/>
             </Grid>
 
             <!-- TARGET/TEMPLATE LEVEL: WrapPanel of TargetTemplateItemView cards -->
