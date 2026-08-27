@@ -51,37 +51,8 @@
         <!-- SPLITTER & LOGS -->
         <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" Background="#D1D5DB" Margin="0,5,15,5" Cursor="SizeNS"/>
 
-        <Grid Grid.Row="3" Margin="0,0,15,0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <Grid Grid.Row="0" Margin="0,0,0,5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="System Logs" FontWeight="Bold" VerticalAlignment="Center"/>
-                <Button Grid.Column="1" Content="Clear Logs" Command="{Binding ClearLogsCommand}" Padding="10,2" FontSize="11"/>
-            </Grid>
-            <ListBox Grid.Row="1" ItemsSource="{Binding LiveLogs}" SelectionMode="Extended" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                <ListBox.InputBindings>
-                    <KeyBinding Key="C" Modifiers="Ctrl" Command="{Binding CopyLogsCommand}"/>
-                </ListBox.InputBindings>
-                <ListBox.ItemContainerStyle>
-                    <Style TargetType="ListBoxItem">
-                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}"/>
-                        <Setter Property="Padding" Value="4"/>
-                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                        <Setter Property="BorderBrush" Value="#E5E7EB"/>
-                    </Style>
-                </ListBox.ItemContainerStyle>
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Message}" TextWrapping="Wrap"/>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-        </Grid>
+        <!-- LOG rows-->
+        <views:LogView Grid.Row="3"  Margin="0,0,15,0" />
+
     </Grid>
 </UserControl>
