@@ -7,6 +7,7 @@
         <ResourceDictionary>
             <local:TemplateLocator x:Key="GlobalTemplateLocator" />
             <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Styles/DefaultStyles.xaml"/>
                 <ResourceDictionary Source="Styles/MonitoredStateStyles.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
