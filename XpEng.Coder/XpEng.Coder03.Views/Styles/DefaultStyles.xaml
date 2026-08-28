@@ -31,8 +31,8 @@
                 </Viewbox>
 
                 <!-- Expanded content only -->
-                <Grid x:Name="ExpandedContent" Grid.Column="1" Width="8" Height="10"
-                  Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Grid x:Name="ExpandedContent" Grid.Column="1" Width="2" Height="10"
+                      Visibility="Hidden" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="*"/>
@@ -66,6 +66,7 @@
 
         <ControlTemplate.Triggers>
             <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="ExpandedContent" Property="Width" Value="8"/>
                 <Setter TargetName="ExpandedContent" Property="Visibility" Value="Visible"/>
             </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
