@@ -47,55 +47,72 @@
 
             <StackPanel>
                 <!-- SETUP LEVEL — Plan-scoped, one-shot, distinct from continuous file-watching. -->
-                <Border Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1" Margin="30,0,0,15" Padding="10">
-                    <StackPanel>
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                <Border Background="#EEF2FF" BorderBrush="#C7D2FE" BorderThickness="1"
+        Margin="30,0,0,15" Padding="10">
 
-                            <TextBlock Grid.Column="0" Text="Setup" FontWeight="SemiBold" Foreground="#4338CA"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <CheckBox Grid.Column="2" Content="Active" IsChecked="{Binding IsSetupActive, Mode=TwoWay}"
-                                      VerticalAlignment="Center" FontWeight="SemiBold"
-                                      ToolTip="Runs on the next Force Sync. Automatically unchecks itself once Setup completes successfully."/>
-                        </Grid>
+                    <StackPanel Grid.IsSharedSizeScope="True">
 
-                        <!-- Adaptive layout for Solution File -->
-                        <controls:AdaptivePanel Margin="0,0,0,8">
-                            <TextBlock Text="Solution File:" Width="95" FontWeight="Bold" VerticalAlignment="Center"/>
-                            <Grid VerticalAlignment="Center">
+                        <!-- Card title -->
+                        <TextBlock Text="Setup" FontSize="15" FontWeight="Bold" Foreground="#3730A3"
+                   HorizontalAlignment="Left" Margin="0,0,0,8"/>
+
+                        <!-- Rows -->
+                        <StackPanel>
+
+                            <!-- Solution File -->
+                            <Grid Margin="0,0,0,8">
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="SetupActivation"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="SetupLabel"/>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="SetupBrowse"/>
                                 </Grid.ColumnDefinitions>
 
-                                <TextBox Grid.Column="0" Text="{Binding SetupSolutionFile, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
-                                         ToolTip="Solution File (.sln / .slnx)" VerticalAlignment="Center" Padding="4,2"
-                                         MinWidth="220" MaxWidth="900"/>
-                                <Button Grid.Column="1" Click="BrowseSetupSolutionFile_Click"
-                                        ToolTip="Select Solution File" Style="{StaticResource BrowseButtonStyle}"/>
-                            </Grid>
-                        </controls:AdaptivePanel>
+                                <!-- Empty activation column intentionally reserves the same width as row 2. -->
 
-                        <!-- Adaptive layout for Setup Template -->
-                        <controls:AdaptivePanel Margin="0,0,0,8">
-                            <TextBlock Text="Setup Template:" Width="95" FontWeight="Bold" VerticalAlignment="Center"/>
-                            <Grid VerticalAlignment="Center">
+                                <TextBlock Grid.Column="1" Text="Solution File:" FontWeight="Bold"
+                           VerticalAlignment="Center" Margin="0,0,8,0"/>
+
+                                <controls:SmartPathTextBox Grid.Column="2"
+                        FullPath="{Binding SetupSolutionFile, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
+                        ToolTip="{Binding SetupSolutionFile}" VerticalAlignment="Center"
+                        Padding="4,2" MinWidth="220" MaxWidth="900"/>
+
+                                <Button Grid.Column="3" Click="BrowseSetupSolutionFile_Click"
+                        ToolTip="Select Solution File" Style="{StaticResource BrowseButtonStyle}"/>
+                            </Grid>
+
+                            <!-- Setup Template -->
+                            <Grid>
                                 <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="SetupActivation"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="SetupLabel"/>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="SetupBrowse"/>
                                 </Grid.ColumnDefinitions>
 
-                                <TextBox Grid.Column="0" Text="{Binding SetupTemplatePathDisplay, Mode=OneWay}" IsReadOnly="True"
-                                         ToolTip="{Binding SetupTemplatePath}" VerticalAlignment="Center" Padding="4,2"
-                                         MinWidth="220" MaxWidth="900"/>
-                                <Button Grid.Column="1" Click="BrowseSetupTemplate_Click"
-                                        ToolTip="Select Setup Template File" Style="{StaticResource BrowseButtonStyle}"/>
+                                <CheckBox Grid.Column="0" IsChecked="{Binding IsSetupActive, Mode=TwoWay}"
+                          VerticalAlignment="Center" Margin="0,0,8,0"
+                          ToolTip="Run the Setup Template on the next Force Sync. Automatically clears after successful completion."/>
+
+                                <TextBlock Grid.Column="1" Text="Setup Template:" FontWeight="Bold"
+                           VerticalAlignment="Center" Margin="0,0,8,0"
+                           controls:Dimmer.IsActive="{Binding IsSetupActive}"
+                           Style="{StaticResource DimWhenInactiveStyle}"/>
+
+                                <controls:SmartPathTextBox Grid.Column="2"
+                        FullPath="{Binding SetupTemplatePath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, Delay=300}"
+                        ToolTip="{Binding SetupTemplatePath}" VerticalAlignment="Center"
+                        Padding="4,2" MinWidth="220" MaxWidth="900"
+                        controls:Dimmer.IsActive="{Binding IsSetupActive}"
+                        Style="{StaticResource DimWhenInactiveStyle}"/>
+
+                                <Button Grid.Column="3" Click="BrowseSetupTemplate_Click"
+                        ToolTip="Select Setup Template File" Style="{StaticResource BrowseButtonStyle}"
+                        controls:Dimmer.IsActive="{Binding IsSetupActive}"/>
                             </Grid>
-                        </controls:AdaptivePanel>
+
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 

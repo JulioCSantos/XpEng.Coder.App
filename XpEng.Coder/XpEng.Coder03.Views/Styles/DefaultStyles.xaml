@@ -1,4 +1,5 @@
 ﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:controls="clr-namespace:XpEng.Coder03.Views.Controls"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <ControlTemplate x:Key="BraceExpanderToggleButtonTemplate" TargetType="ToggleButton">
@@ -130,5 +131,13 @@
         </Setter>
     </Style>
 
-  
+    <Style x:Key="DimWhenInactiveStyle" TargetType="{x:Type FrameworkElement}">
+        <Setter Property="Opacity" Value="1"/>
+        <Style.Triggers>
+            <Trigger Property="controls:Dimmer.IsActive" Value="False">
+                <Setter Property="Opacity" Value=".5"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
 </ResourceDictionary>
