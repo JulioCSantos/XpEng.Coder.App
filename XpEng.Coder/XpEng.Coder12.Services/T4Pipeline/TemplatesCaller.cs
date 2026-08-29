@@ -37,6 +37,27 @@ public class TemplatesCaller : ITemplatesCaller {
         }
     }
 
+    public async Task<bool> ExecuteSetupAsync(string templatePath, string solutionFilePath) {
+        string templateName = Path.GetFileNameWithoutExtension(templatePath);
+
+        string templateContent = await File.ReadAllTextAsync(templatePath);
+        string templateHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(templateContent)));
+
+        // SolutionFilePath is the entire Setup contract — the template derives every
+        // destination itself. outputFilePath is empty: Setup writes to many locations,
+        // and nothing in the pipeline reads that field anyway.
+        var sessionParameters = new Dictionary<string, string> {
+            ["SolutionFilePath"] = solutionFilePath
+        };
+
+        var response = await Caller.GenerateAsync(templatePath, templateContent, templateHash, sessionParameters, string.Empty, CancellationToken.None);
+
+        if (!response.Success) Logger.Log($"Setup failed for {templateName}: {response.ErrorMessage}");
+        else Logger.Log($"Setup complete for {templateName} in {response.ElapsedMilliseconds}ms.");
+
+        return response.Success;
+    }
+
     public async Task FullSynchronizationAsync(string planName, IEnumerable<GenerationTarget> targets, string sourceDirectoryPath) {
         Logger.Log($"Starting full synchronization...");
 
@@ -112,7 +133,7 @@ public class TemplatesCaller : ITemplatesCaller {
         return metadataPath;
     }
 
-    public async Task ExecuteTemplateAsync(string templatePath, string metadataFilePath, string targetDirectory, int fileCount) {
+    public async Task<bool> ExecuteTemplateAsync(string templatePath, string metadataFilePath, string targetDirectory, int fileCount) {
         string templateName = Path.GetFileNameWithoutExtension(templatePath);
 
         string templateContent = await File.ReadAllTextAsync(templatePath);
@@ -133,5 +154,6 @@ public class TemplatesCaller : ITemplatesCaller {
         }
 
         if (File.Exists(metadataFilePath)) File.Delete(metadataFilePath);
+        return response.Success;
     }
 }

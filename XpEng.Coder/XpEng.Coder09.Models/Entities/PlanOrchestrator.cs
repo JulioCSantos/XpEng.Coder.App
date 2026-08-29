@@ -22,6 +22,18 @@ namespace XpEng.Coder09.Models.Entities {
         private ObservableCollection<SourceDirectory> _sourceDirectories;
         #endregion SourceDirectories
 
+        #region Setup
+        // Plan-scoped, one-shot. Cleared automatically after a successful Setup run — see ForceSync().
+        [ObservableProperty]
+        private bool _isSetupActive;
+
+        [ObservableProperty]
+        private string _setupSolutionFile = string.Empty;
+
+        [ObservableProperty]
+        private string _setupTemplatePath = string.Empty;
+        #endregion Setup
+
         [JsonIgnore]
         [ObservableProperty]
         private bool _isDirty;
@@ -44,6 +56,10 @@ namespace XpEng.Coder09.Models.Entities {
 
             IsMonitored = poco.IsMonitored;
             SourceDirectories = new ObservableCollection<SourceDirectory>(poco.SourceDirectories.Select(s => new SourceDirectory(s)));
+
+            IsSetupActive = poco.IsSetupActive;
+            SetupSolutionFile = poco.SetupSolutionFile;
+            SetupTemplatePath = poco.SetupTemplatePath;
         }
         #endregion constructors
 
@@ -52,7 +68,10 @@ namespace XpEng.Coder09.Models.Entities {
                 Id = this.Id.ToString(),
                 PlanName = this.PlanName,
                 IsMonitored = this.IsMonitored,
-                SourceDirectories = new ObservableCollection<SourceDirectoryPoco>(this.SourceDirectories.Select(s => s.ToPoco()))
+                SourceDirectories = new ObservableCollection<SourceDirectoryPoco>(this.SourceDirectories.Select(s => s.ToPoco())),
+                IsSetupActive = this.IsSetupActive,
+                SetupSolutionFile = this.SetupSolutionFile,
+                SetupTemplatePath = this.SetupTemplatePath
             };
         }
     }

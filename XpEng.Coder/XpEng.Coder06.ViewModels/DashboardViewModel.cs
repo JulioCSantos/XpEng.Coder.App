@@ -147,8 +147,9 @@ namespace XpEng.Coder06.ViewModels {
         #endregion UIPlans
 
         private bool CanToggleWatch => IsWatching || UIPlans.Any(p => p.SourceDirectories.Any(s => s.TargetTemplates.Any(t => !t.IsEmpty)));
-        private bool CanForceSync => UIPlans.Any(p => p.SourceDirectories.Any(s => s.TargetTemplates.Any(t => !t.IsEmpty)));
-        public event EventHandler<string>? CopyToClipboardRequested;
+        private bool CanForceSync =>
+            UIPlans.Any(p => p.IsSetupActive) ||
+            UIPlans.Any(p => p.SourceDirectories.Any(s => s.TargetTemplates.Any(t => !t.IsEmpty))); public event EventHandler<string>? CopyToClipboardRequested;
         #endregion Properties
 
         #region Constructors
@@ -267,6 +268,9 @@ namespace XpEng.Coder06.ViewModels {
                     Id = poco.Id,
                     PlanName = poco.PlanName,
                     IsMonitored = poco.IsMonitored,
+                    IsSetupActive = poco.IsSetupActive,
+                    SetupSolutionFile = poco.SetupSolutionFile,
+                    SetupTemplatePath = poco.SetupTemplatePath,
                     SourceDirectories = new ObservableCollection<SourceDirectoryPoco>(
                         poco.SourceDirectories.Where(s => !s.IsEmpty).Select(s => new SourceDirectoryPoco {
                             Id = s.Id,
@@ -434,6 +438,16 @@ namespace XpEng.Coder06.ViewModels {
             var caller = DIExtensions.ServiceProvider.GetRequiredService<ITemplatesCaller>();
 
             foreach (var plan in MainModel.Instance.PlanOrchestrators.Where(p => p.IsMonitored)) {
+
+                // SETUP — Plan-scoped, one-shot, runs before this plan's targets since the
+                // foundational files it installs are a precondition for generated code.
+                if (plan.IsSetupActive) {
+                    bool succeeded = await caller.ExecuteSetupAsync(plan.SetupTemplatePath, plan.SetupSolutionFile);
+                    if (succeeded) {
+                        plan.IsSetupActive = false; // auto-disarm only on success — a failed run stays armed for retry
+                    }
+                }
+
                 foreach (var source in plan.SourceDirectories.Where(s => s.SourcePath != null && s.SourcePath.Exists)) {
                     var activeTargets = source.TargetTemplates
                         .Where(t => t.IsMonitored)
