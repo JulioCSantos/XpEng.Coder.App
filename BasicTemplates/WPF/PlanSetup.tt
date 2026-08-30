@@ -1,0 +1,62 @@
+<#@ template language="C#" hostspecific="true" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.IO" #>
+<#@ parameter name="SolutionFilePath" type="System.String" #>
+<#@ include file="../Shared/IncludeProbe.ttinclude" #>
+<#
+    // PROBE — tests two things only: that the relative include above resolves under
+    // Mono.TextTemplating, and that SolutionFilePath is the entire Setup contract
+    // (no TargetDirectory; the template derives every destination itself).
+
+    if (string.IsNullOrWhiteSpace(SolutionFilePath)) {
+        Write("Error: SolutionFilePath was not provided.");
+        return string.Empty;
+    }
+
+    string solutionRoot = Path.GetDirectoryName(SolutionFilePath) ?? string.Empty;
+
+    // Locate the Tests project by looking for a folder whose name ends in "Tests",
+    // searching only one level deep on each branch to avoid descending into bin/obj.
+    string testsProjectRoot = FindTestsProjectRoot(solutionRoot);
+    if (string.IsNullOrWhiteSpace(testsProjectRoot)) {
+        Write($"Error: could not find a *Tests folder under {solutionRoot}");
+        return string.Empty;
+    }
+
+    var sb = new StringBuilder();
+    sb.AppendLine("Setup probe ran successfully.");
+    sb.AppendLine($"Timestamp:        {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+    sb.AppendLine($"SolutionFilePath: {SolutionFilePath}");
+    sb.AppendLine($"Solution root:    {solutionRoot}");
+    sb.AppendLine($"Tests project:    {testsProjectRoot}");
+    sb.AppendLine();
+    sb.AppendLine("--- from the included component ---");
+    sb.AppendLine(ProbeIdentity());
+    sb.AppendLine(ProbeGreeting(SolutionFilePath));
+
+    string outputPath = Path.Combine(testsProjectRoot, "SetupProbe.marker.txt");
+    File.WriteAllText(outputPath, sb.ToString());
+
+    Write($"Setup probe complete. Marker written to {outputPath}");
+#>
+<#+
+    private string FindTestsProjectRoot(string solutionRoot) {
+        if (!Directory.Exists(solutionRoot)) return string.Empty;
+
+        foreach (string directory in Directory.GetDirectories(solutionRoot, "*", SearchOption.AllDirectories)) {
+            string name = Path.GetFileName(directory);
+            if (name.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("obj", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(".", StringComparison.Ordinal)) continue;
+
+            if (name.EndsWith("Tests", StringComparison.OrdinalIgnoreCase) &&
+                Directory.GetFiles(directory, "*.csproj").Length > 0) {
+                return directory;
+            }
+        }
+
+        return string.Empty;
+    }
+#>

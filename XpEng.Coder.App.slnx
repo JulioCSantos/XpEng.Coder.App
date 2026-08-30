@@ -5,6 +5,12 @@
     <File Path="BasicTemplates/README T4TemplatesContract.md" />
     <File Path="MainModelGraph.tt" />
   </Folder>
+  <Folder Name="/BasicTemplates/Shared/">
+    <File Path="BasicTemplates/Shared/IncludeProbe.ttinclude" />
+  </Folder>
+  <Folder Name="/BasicTemplates/WPF/">
+    <File Path="BasicTemplates/WPF/PlanSetup.tt" />
+  </Folder>
   <Project Path="XpEng.Coder/XpEng.Coder03.Views/XpEng.Coder03.Views.csproj" />
   <Project Path="XpEng.Coder/XpEng.Coder06.Data/XpEng.Coder06.Data.csproj" />
   <Project Path="XpEng.Coder/XpEng.Coder06.ViewModels/XpEng.Coder06.ViewModels.csproj" />
