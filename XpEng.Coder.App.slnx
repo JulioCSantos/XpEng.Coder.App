@@ -6,7 +6,8 @@
     <File Path="MainModelGraph.tt" />
   </Folder>
   <Folder Name="/BasicTemplates/Shared/">
-    <File Path="BasicTemplates/Shared/IncludeProbe.ttinclude" />
+    <File Path="BasicTemplates/Shared/TemplateArguments.ttinclude" />
+    <File Path="BasicTemplates/Shared/TemplateLog.ttinclude" />
   </Folder>
   <Folder Name="/BasicTemplates/WPF/">
     <File Path="BasicTemplates/WPF/PlanSetup.tt" />

@@ -3,45 +3,71 @@
 <#@ import namespace="System.Linq" #>
 <#@ import namespace="System.Text" #>
 <#@ import namespace="System.IO" #>
-<#@ parameter name="SolutionFilePath" type="System.String" #>
-<#@ include file="../Shared/IncludeProbe.ttinclude" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ include file="../Shared/TemplateArguments.ttinclude" #>
+<#@ include file="../Shared/TemplateLog.ttinclude" #>
 <#
-    // PROBE — tests two things only: that the relative include above resolves under
-    // Mono.TextTemplating, and that SolutionFilePath is the entire Setup contract
-    // (no TargetDirectory; the template derives every destination itself).
+    // ============================================================
+    // ARGUMENTS (read from {SolutionRoot}\CoderFiles\PlanSetup.args.txt)
+    //
+    //   SolutionFilePath  (required) — full path to the .slnx/.sln this Setup targets.
+    //
+    // Coder.App writes this file before every invocation. To run this template manually
+    // from inside a solution, create the file by hand with the same key.
+    // ============================================================
 
-    if (string.IsNullOrWhiteSpace(SolutionFilePath)) {
-        Write("Error: SolutionFilePath was not provided.");
+    if (!HasArguments) {
+        LogError($"No arguments file found. Looked at: {ArgumentsFilePathForDiagnostics}", null);
         return string.Empty;
     }
 
-    string solutionRoot = Path.GetDirectoryName(SolutionFilePath) ?? string.Empty;
+    string solutionFilePath = GetArgument("SolutionFilePath");
+    if (string.IsNullOrWhiteSpace(solutionFilePath)) {
+        LogError($"SolutionFilePath is missing from {ArgumentsFilePathForDiagnostics}", null);
+        return string.Empty;
+    }
 
-    // Locate the Tests project by looking for a folder whose name ends in "Tests",
-    // searching only one level deep on each branch to avoid descending into bin/obj.
+    Log($"Arguments file  : {ArgumentsFilePathForDiagnostics}");
+    Log($"SolutionFilePath: {solutionFilePath}");
+    Log($"Solution exists : {File.Exists(solutionFilePath)}");
+
+    if (!File.Exists(solutionFilePath)) {
+        LogError($"Solution file does not exist: {solutionFilePath}", null);
+        return string.Empty;
+    }
+
+    string solutionRoot = Path.GetDirectoryName(solutionFilePath) ?? string.Empty;
+
     string testsProjectRoot = FindTestsProjectRoot(solutionRoot);
     if (string.IsNullOrWhiteSpace(testsProjectRoot)) {
-        Write($"Error: could not find a *Tests folder under {solutionRoot}");
+        LogError($"Could not find a *Tests folder under {solutionRoot}", solutionFilePath);
         return string.Empty;
     }
+
+    Log($"Tests project   : {testsProjectRoot}");
 
     var sb = new StringBuilder();
     sb.AppendLine("Setup probe ran successfully.");
     sb.AppendLine($"Timestamp:        {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-    sb.AppendLine($"SolutionFilePath: {SolutionFilePath}");
+    sb.AppendLine($"Arguments file:   {ArgumentsFilePathForDiagnostics}");
+    sb.AppendLine($"SolutionFilePath: {solutionFilePath}");
     sb.AppendLine($"Solution root:    {solutionRoot}");
     sb.AppendLine($"Tests project:    {testsProjectRoot}");
-    sb.AppendLine();
-    sb.AppendLine("--- from the included component ---");
-    sb.AppendLine(ProbeIdentity());
-    sb.AppendLine(ProbeGreeting(SolutionFilePath));
 
-    string outputPath = Path.Combine(testsProjectRoot, "SetupProbe.marker.txt");
-    File.WriteAllText(outputPath, sb.ToString());
+    string markerPath = Path.Combine(testsProjectRoot, "SetupProbe.marker.txt");
+    File.WriteAllText(markerPath, sb.ToString());
+    Log($"Marker written  : {markerPath}");
 
-    Write($"Setup probe complete. Marker written to {outputPath}");
+    FlushLog(solutionFilePath);
+
+    Write($"Setup probe complete. Marker: {markerPath}");
 #>
 <#+
+    // Required by TemplateArguments.ttinclude and TemplateLog.ttinclude: under the t4 CLI,
+    // Host.TemplateFile is empty, so the template cannot discover its own name. Every
+    // template using these includes must declare this.
+    private string TemplateNameFallback { get { return "PlanSetup"; } }
+
     private string FindTestsProjectRoot(string solutionRoot) {
         if (!Directory.Exists(solutionRoot)) return string.Empty;
 

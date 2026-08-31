@@ -1,0 +1,107 @@
+<#+
+    // Locates and reads the per-invocation arguments file.
+    //
+    // Resolution order:
+    //   1. The ArgsFilePath session parameter, when Coder.App supplied one.
+    //   2. Walk up to a folder containing a .slnx/.sln, then look inside CoderFiles/.
+    //      Only works when the template lives inside the solution it operates on — which
+    //      is exactly the manual-invocation case.
+    //
+    // Arguments themselves are ALWAYS read from the file. Session parameters are not
+    // consulted for anything except locating it.
+
+    private Dictionary<string, string> _templateArguments;
+
+    private Dictionary<string, string> TemplateArguments {
+        get {
+            if (_templateArguments != null) return _templateArguments;
+
+            string path = ResolveArgumentsFilePath();
+            _templateArguments = ReadKeyValueFile(path);
+            return _templateArguments;
+        }
+    }
+
+    private string _resolvedArgumentsFilePath;
+
+    private string ResolveArgumentsFilePath() {
+        if (_resolvedArgumentsFilePath != null) return _resolvedArgumentsFilePath;
+
+        // 1. Supplied by Coder.App.
+        string supplied = GetSessionValue("ArgsFilePath");
+        if (!string.IsNullOrWhiteSpace(supplied) && File.Exists(supplied)) {
+            _resolvedArgumentsFilePath = supplied;
+            return _resolvedArgumentsFilePath;
+        }
+
+        // 2. Manual invocation: walk up to the solution, then look in CoderFiles/.
+        string templatePath = Host.TemplateFile;
+
+        // Host.TemplateFile is empty under the t4 CLI (only Visual Studio and Coder.App
+        // populate it), so fall back to the working directory — which for a CLI run is the
+        // folder the template was invoked from.
+        string startDirectory = string.IsNullOrWhiteSpace(templatePath)
+            ? Directory.GetCurrentDirectory()
+            : Path.GetDirectoryName(templatePath);
+
+        if (string.IsNullOrWhiteSpace(startDirectory)) startDirectory = Directory.GetCurrentDirectory();
+
+        // With no Host.TemplateFile the template cannot know its own name, so it cannot
+        // derive its args filename. TemplateNameFallback is declared by the template itself
+        // for exactly this case.
+        string templateName = string.IsNullOrWhiteSpace(templatePath)
+            ? TemplateNameFallback
+            : Path.GetFileNameWithoutExtension(templatePath);
+
+        var directory = new DirectoryInfo(startDirectory);
+        while (directory != null) {
+            if (directory.GetFiles("*.slnx").Length > 0 || directory.GetFiles("*.sln").Length > 0) {
+                string candidate = Path.Combine(directory.FullName, "CoderFiles", templateName + ".args.txt");
+                _resolvedArgumentsFilePath = File.Exists(candidate) ? candidate : string.Empty;
+                return _resolvedArgumentsFilePath;
+            }
+            directory = directory.Parent;
+        }
+
+        _resolvedArgumentsFilePath = string.Empty;
+        return _resolvedArgumentsFilePath;
+    }
+
+    private string GetSessionValue(string key) {
+        try {
+            if (Session != null && Session.ContainsKey(key)) return Session[key] as string;
+        }
+        catch { }
+        return string.Empty;
+    }
+
+    private Dictionary<string, string> ReadKeyValueFile(string path) {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return result;
+
+        foreach (string rawLine in File.ReadAllLines(path)) {
+            string line = rawLine.Trim();
+            if (line.Length == 0 || line.StartsWith("#")) continue;
+
+            int separator = line.IndexOf('=');
+            if (separator <= 0) continue;
+
+            result[line.Substring(0, separator).Trim()] = line.Substring(separator + 1).Trim();
+        }
+        return result;
+    }
+
+    private string GetArgument(string key, string defaultValue = "") {
+        return TemplateArguments.TryGetValue(key, out string value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : defaultValue;
+    }
+
+    private bool HasArguments {
+        get { return TemplateArguments.Count > 0; }
+    }
+
+    private string ArgumentsFilePathForDiagnostics {
+        get { return string.IsNullOrWhiteSpace(ResolveArgumentsFilePath()) ? "(not found)" : ResolveArgumentsFilePath(); }
+    }
+#>

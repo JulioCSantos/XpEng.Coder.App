@@ -1,0 +1,56 @@
+<#+
+    // Accumulates log lines and writes them beside the arguments file. Call FlushLog()
+    // once at the end of the template.
+
+    private List<string> _logLines;
+
+    private List<string> LogLines {
+        get { return _logLines ?? (_logLines = new List<string>()); }
+    }
+
+    private void Log(string message) {
+        LogLines.Add(string.Format("[{0:HH:mm:ss}] {1}", DateTime.Now, message));
+    }
+
+    /// Logs the message, writes the log file, and raises it as a real host error so it
+    /// surfaces on the t4 console / VS Error List / Coder.App logs — rather than only
+    /// landing in the generated output file, where it is easy to miss.
+    private void LogError(string message, string solutionFilePath) {
+        Log("ERROR: " + message);
+        FlushLog(solutionFilePath);
+        Error(message);
+    }
+
+    private void FlushLog(string solutionFilePath) {
+        string folder = ResolveLogFolder(solutionFilePath);
+        Directory.CreateDirectory(folder);
+
+        string templateName = string.IsNullOrWhiteSpace(Host.TemplateFile)
+            ? TemplateNameFallback
+            : Path.GetFileNameWithoutExtension(Host.TemplateFile);
+
+        string logPath = Path.Combine(folder, templateName + ".log.txt");
+
+        var sb = new StringBuilder();
+        sb.AppendLine("# " + templateName + " — run at " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+        sb.AppendLine();
+        foreach (string line in LogLines) sb.AppendLine(line);
+
+        File.WriteAllText(logPath, sb.ToString());
+    }
+
+    // Prefer {SolutionRoot}\CoderFiles, but fall back to the template's own folder when the
+    // solution path is unknown — which is precisely the failure we most need logged.
+    private string ResolveLogFolder(string solutionFilePath) {
+        if (!string.IsNullOrWhiteSpace(solutionFilePath)) {
+            string solutionRoot = Path.GetDirectoryName(solutionFilePath);
+            if (!string.IsNullOrWhiteSpace(solutionRoot)) return Path.Combine(solutionRoot, "CoderFiles");
+        }
+
+        string templateFolder = string.IsNullOrWhiteSpace(Host.TemplateFile)
+            ? Directory.GetCurrentDirectory()
+            : Path.GetDirectoryName(Host.TemplateFile);
+
+        return string.IsNullOrWhiteSpace(templateFolder) ? Directory.GetCurrentDirectory() : templateFolder;
+    }
+#>

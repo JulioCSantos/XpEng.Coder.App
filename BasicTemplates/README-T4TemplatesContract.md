@@ -1,37 +1,115 @@
 # T4 Template Contract for XpEng.Coder.App
 
 This document defines what a T4 template must do to be invoked correctly by
-`XpEng.Coder.App`. Templates live in an arbitrary repository folder — not
-necessarily inside any solution Coder.App watches — and are selected by an
-operator at runtime, so this contract is the only thing tying a template to
-the host correctly. `BasicClassTemplate.tt` and `ModelsProject.tt` are the
-reference implementations; when in doubt, read one of them alongside this
-doc.
+`XpEng.Coder.App` — and, for templates using the arguments file, by Visual
+Studio's "Run Custom Tool" and the `t4` command-line tool as well.
+
+Templates live in an arbitrary repository folder — not necessarily inside any
+solution Coder.App watches — and are selected by an operator at runtime, so this
+contract is the only thing tying a template to its host correctly.
+
+`PlanSetup.tt` is the reference for the arguments-file pattern;
+`BasicClassTemplate.tt` and `ModelsProject.tt` are the references for the
+metadata-driven pattern. When in doubt, read one of them alongside this doc.
 
 ## Required directives
 
 ```csharp
 <#@ template language="C#" hostspecific="true" #>
+```
+
+`hostspecific="true"` is required — without it `Host.TemplateFile` and other
+host members are unavailable, and the arguments-file fallback cannot locate
+anything.
+
+A template driven by the arguments file needs no `<#@ parameter #>` directives
+at all; it reads everything through `GetArgument(...)`. A metadata-driven
+template still declares:
+
+```csharp
 <#@ parameter name="MetadataFilePath" type="System.String" #>
 <#@ parameter name="TargetDirectory" type="System.String" #>
 ```
 
-- `hostspecific="true"` is required — without it, `Host.TemplateFile` and
-  other host-specific members aren't available to your template.
-- These two parameters are the entire session contract today. Coder.App's
-  session values are always `string` — there is no mechanism to pass a
-  richer type. If your template needs structured data beyond a file path,
-  put it in the metadata JSON itself (see below), not in a new parameter.
+Every template using the shared includes must also declare `TemplateNameFallback`
+in its own `<#+ #>` block — see Host differences.
 
-## What Coder.App gives you
+## How a template receives its inputs
 
-- **`MetadataFilePath`** — path to a JSON file describing every file change
-  in this batch (schema below). Coder.App deletes this file once your
-  template invocation returns, so read it during execution — don't defer
-  reading it or cache the path for later.
-- **`TargetDirectory`** — absolute path your generated output should live
-  under. Coder.App has no opinion on filenames or subfolder structure
-  within it.
+Two mechanisms exist. New templates should use the arguments file; the session
+parameters described after it remain in place for the metadata-driven templates
+that predate it.
+
+### Arguments file (preferred)
+
+Coder.App writes every argument it would have passed into a plain `key=value`
+file under `{SolutionRoot}\CoderFiles\`, and the template reads that file. The
+point is host independence: a template that reads its arguments from a file runs
+identically under Coder.App, under Visual Studio's "Run Custom Tool", and under
+the `t4` command-line tool. A template that reads session parameters only runs
+under Coder.App, because no other host populates them.
+
+Three rules follow from this:
+
+- **The file is per-invocation, not per-template.** One template can run against
+  several targets in a single Force Sync, so the file name encodes which
+  invocation it belongs to (see below).
+- **Coder.App always overwrites it.** It records what ran; it is not a config
+  file. Hand-edits are replaced on the next Coder.App run, deliberately.
+- **The template reads it unconditionally.** If it is missing or malformed the
+  template fails rather than falling back to session parameters. One input path,
+  identical everywhere.
+
+The only fallback is for *locating* the file, never for reading arguments:
+
+1. Coder.App passes `ArgsFilePath` as its single session parameter. This always
+   wins when present.
+2. Otherwise the template walks up from its own location to a folder containing
+   a `.slnx`/`.sln`, then looks inside `CoderFiles/`.
+
+The fallback only succeeds when the template lives *inside* the solution it
+operates on — which is exactly the manual-invocation case, where the template is
+the customer's own copy checked into their repository. Under Coder.App the
+template normally lives elsewhere, which is why the session parameter must win.
+
+`Shared/TemplateArguments.ttinclude` implements all of this; a template calls
+`GetArgument("SomeKey")` and never touches the resolution logic.
+
+### File naming
+
+Files live flat in `{SolutionRoot}\CoderFiles\`:
+
+```
+{TemplateName}_{FlattenedTargetPath}.args.txt
+{TemplateName}_{FlattenedTargetPath}.log.txt
+```
+
+`FlattenedTargetPath` is the target directory relative to the solution root with
+separators replaced by underscores — backslashes cannot appear in a file name,
+so the path is flattened rather than nested. The solution folder itself is not
+included; it is implied by which `CoderFiles/` folder you are looking at. A
+template with no target directory (Setup) uses just its own name:
+
+```
+PlanSetup.args.txt
+ModelsProject_TBQuiz09.Models_Models_AutoGenerated.args.txt
+```
+
+`TemplateArgumentsFile` in `Coder80.Infrastructure` builds these paths and writes
+the file; templates read them via the include.
+
+### Session parameters (metadata-driven templates)
+
+Templates driven by a batch of file changes still receive:
+
+- **`MetadataFilePath`** — path to a JSON file describing every file change in
+  this batch (schema below). Coder.App deletes this file once the invocation
+  returns, so read it during execution.
+- **`TargetDirectory`** — absolute path the generated output should live under.
+
+Session values are always `string`; there is no mechanism for richer types. If a
+template needs structured data, put it in the metadata JSON or the arguments
+file, not in a new parameter.
 
 ## Metadata JSON schema
 
@@ -286,6 +364,91 @@ convention EF Core Power Tools itself uses in its own scaffolded output,
 for the same reason: each file becomes self-contained and correct
 regardless of whatever the project happens to be configured to.
 
+## Shared components (`.ttinclude`)
+
+Reusable template code lives as **source** in `BasicTemplates/Shared/`, included
+by relative path:
+
+```csharp
+<#@ include file="../Shared/TemplateArguments.ttinclude" #>
+```
+
+Source rather than a compiled assembly, deliberately. A `<#@ assembly #>`
+reference would have to resolve to a DLL inside Coder.App's build output, which
+breaks the moment the folder is copied elsewhere — and the reference set
+available to templates is restricted enough (see Constraints) that assembly
+references are fragile even when they resolve.
+
+The layout supports several target platforms without duplicating shared code:
+
+```
+BasicTemplates/
+    Shared/
+        TemplateArguments.ttinclude
+        TemplateLog.ttinclude
+    WPF/
+        PlanSetup.tt          <#@ include file="../Shared/TemplateArguments.ttinclude" #>
+    Blazor/
+    MAUI/
+```
+
+`..` traversal is fine as long as it stays inside `BasicTemplates`, which keeps
+the whole folder copyable into a customer's own repository as a unit.
+
+**Include resolution needs help from the host.** Mono.TextTemplating resolves
+relative includes against `TemplateGenerator.IncludePaths`, not against the
+template's own location — with an empty list it falls back to the process
+working directory (`…\bin\Debug\`), which is never right.
+`TemplateCompilerService.CompileAsync` therefore adds the template's own folder
+to `IncludePaths` before compiling. Visual Studio's host resolves relative to the
+`.tt` file by default and needs no equivalent.
+
+T4 inlines every `<#+ #>` block — from the template and all its includes — into
+one generated class, which is why an include can call a method the template
+defines. `TemplateNameFallback` works this way: the includes call it, each
+template declares it.
+
+## Log output
+
+`Write()` reaches a different place under each host: Coder.App's System Logs
+panel, the generated output file under Visual Studio and the `t4` CLI. For a
+template that writes its own files, the generated output file is not somewhere
+anyone looks. `Shared/TemplateLog.ttinclude` writes a real log file instead:
+
+```csharp
+Log("Something happened");                 // accumulate
+FlushLog(solutionFilePath);                // write {SolutionRoot}\CoderFiles\{Template}.log.txt
+```
+
+`FlushLog` falls back to the template's own folder when the solution path is
+unknown — which is precisely the failure case most in need of logging.
+
+**Errors must use `Error()`, not `Write()`.** `Error()` raises a genuine host
+error: `ERROR:` on the `t4` console, the Error List in Visual Studio, and
+`generator.Errors` in Coder.App — where `CompileAsync`'s guard turns it into a
+failed invocation. `Write()` only appends to the generated output file, so a
+template that reports failure with `Write()` looks like it succeeded. That
+matters beyond diagnostics: Coder.App clears a Plan's `IsSetupActive` flag only
+on success, so a failure reported via `Write()` would disarm Setup as though it
+had worked.
+
+`LogError(message, solutionFilePath)` in the include does all three: logs the
+line, flushes the file, and raises the host error.
+
+## Host differences worth knowing
+
+| | Coder.App | Visual Studio | `t4` CLI |
+|---|---|---|---|
+| `Host.TemplateFile` | set | set | **empty** |
+| Session parameters | populated | not populated | not populated |
+| Relative includes | via `IncludePaths` | relative to the `.tt` | relative to working directory |
+| `Write()` output | System Logs | generated file | generated file |
+| `Error()` output | failed invocation | Error List | `ERROR:` on console |
+
+`Host.TemplateFile` being empty under the CLI is why templates must declare
+`TemplateNameFallback` — with no template path, a template cannot discover its
+own name, and therefore cannot derive the name of its own arguments or log file.
+
 ## Constraints
 
 - **Session values are strings only.** No object graphs, no custom types.
@@ -323,8 +486,61 @@ regardless of whatever the project happens to be configured to.
   files, use the file filters above.
 - **Output naming and layout are entirely up to you** beyond the `.g.cs`
   suffix convention above.
+- **The `CoderFiles` folder was previously named `CoderTemplates`.** A solution
+  set up before that rename keeps writing to the old folder until
+  `TemplateArgumentsFile.FolderName` is updated and Coder.App rebuilt; rename the
+  folder on disk at the same time, or the template will read a stale args file
+  from one location while Coder.App writes to the other.
 
-## Minimal skeleton
+## Minimal skeleton — arguments file
+
+The smaller of the two shapes: no metadata, no session parameters, portable
+across all three hosts.
+
+```csharp
+<#@ template language="C#" hostspecific="true" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ include file="../Shared/TemplateArguments.ttinclude" #>
+<#@ include file="../Shared/TemplateLog.ttinclude" #>
+<#
+    // ============================================================
+    // ARGUMENTS (read from {SolutionRoot}\CoderFiles\MyTemplate.args.txt)
+    //
+    //   SolutionFilePath  (required) — full path to the .slnx/.sln.
+    //
+    // Document every argument here: this block is what a customer reads when
+    // hand-authoring the file for a manual run.
+    // ============================================================
+
+    if (!HasArguments) {
+        LogError($"No arguments file found. Looked at: {ArgumentsFilePathForDiagnostics}", null);
+        return string.Empty;
+    }
+
+    string solutionFilePath = GetArgument("SolutionFilePath");
+    if (string.IsNullOrWhiteSpace(solutionFilePath)) {
+        LogError($"SolutionFilePath is missing from {ArgumentsFilePathForDiagnostics}", null);
+        return string.Empty;
+    }
+
+    Log($"SolutionFilePath: {solutionFilePath}");
+
+    // ...do the work, calling Log(...) as you go...
+
+    FlushLog(solutionFilePath);
+    Write("Complete.");
+#>
+<#+
+    // Required by both includes — see Host differences.
+    private string TemplateNameFallback { get { return "MyTemplate"; } }
+#>
+```
+
+## Minimal skeleton — metadata driven
 
 ```csharp
 <#@ template language="C#" hostspecific="true" #>
@@ -396,13 +612,19 @@ partial classes or multi-level inheritance.
 
 ## Reference implementations
 
-- **`BasicClassTemplate.tt`** — one generated ViewModel per changed source
-  file, including deletion and rename handling.
-- **`ModelsProject.tt`** — the fullest working example: full scalar-property
-  mirroring, foreign-key/navigation-property detection via a raw Roslyn
-  re-parse of the source file (richer than the metadata's own `Classes`
-  data), the dual-namespace-block pattern for entity + shared `MainModel`
+- **`Shared/TemplateArguments.ttinclude`** — locates and reads the arguments
+  file; exposes `GetArgument`, `HasArguments`,
+  `ArgumentsFilePathForDiagnostics`.
+- **`Shared/TemplateLog.ttinclude`** — `Log`, `FlushLog`, `LogError`.
+- **`WPF/PlanSetup.tt`** — the smallest complete example of the arguments-file
+  pattern: reads `SolutionFilePath`, logs, reports failure through `LogError`,
+  and declares `TemplateNameFallback`. Verified under all three hosts.
+- **`BasicClassTemplate.tt`** — metadata-driven: one generated ViewModel per
+  changed source file, including deletion and rename handling.
+- **`ModelsProject.tt`** — the fullest metadata-driven example: full
+  scalar-property mirroring, foreign-key/navigation detection via a raw Roslyn
+  re-parse of the source file (richer than the metadata's own `Classes` data),
+  the dual-namespace-block pattern for entity plus shared `MainModel`
   contribution in one file, `#nullable enable` per file, and the complete
-  working `GetBaseTypeIndex`/`GetAllAncestorTypes` type-derivation
-  implementation (partial-class-aware, transitive across multi-level
-  inheritance).
+  partial-class-aware, transitive type-derivation implementation
+  (`GetBaseTypeIndex`/`GetAllAncestorTypes`).

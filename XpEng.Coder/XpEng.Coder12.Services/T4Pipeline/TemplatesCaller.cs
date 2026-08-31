@@ -43,11 +43,26 @@ public class TemplatesCaller : ITemplatesCaller {
         string templateContent = await File.ReadAllTextAsync(templatePath);
         string templateHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(templateContent)));
 
-        // SolutionFilePath is the entire Setup contract — the template derives every
-        // destination itself. outputFilePath is empty: Setup writes to many locations,
-        // and nothing in the pipeline reads that field anyway.
-        var sessionParameters = new Dictionary<string, string> {
+        // Every argument the template needs goes into the file — not into session parameters —
+        // so the same template can be run manually from inside the solution with no host support.
+        var arguments = new Dictionary<string, string> {
             ["SolutionFilePath"] = solutionFilePath
+        };
+
+        string argsFilePath;
+        try {
+            argsFilePath = TemplateArgumentsFile.Write(templatePath, solutionFilePath, arguments);
+            Logger.Log($"Arguments written to {argsFilePath}");
+        }
+        catch (Exception ex) {
+            Logger.Log($"Setup failed for {templateName}: could not write the arguments file. {ex.Message}");
+            return false;
+        }
+
+        // ArgsFilePath is the ONLY session parameter. It exists solely so the template can skip
+        // the walk-up search; everything else comes from the file itself.
+        var sessionParameters = new Dictionary<string, string> {
+            ["ArgsFilePath"] = argsFilePath
         };
 
         var response = await Caller.GenerateAsync(templatePath, templateContent, templateHash, sessionParameters, string.Empty, CancellationToken.None);
