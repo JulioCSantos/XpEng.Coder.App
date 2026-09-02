@@ -1,6 +1,13 @@
 <#+
-    // Accumulates log lines and writes them beside the arguments file. Call FlushLog()
-    // once at the end of the template.
+    // Accumulates log lines and writes them to {SolutionRoot}\CoderFiles\.
+    //
+    // The file name mirrors the args file: template name plus the target directory relative
+    // to the solution root, separators flattened to underscores — so two invocations of the
+    // same template against different targets do not overwrite each other. A template with
+    // no target directory (Setup) uses just its own name.
+    //
+    // FlushLog overwrites rather than appends. LogLines accumulates for the whole run and is
+    // never cleared, so each call rewrites the complete log to that point.
 
     private List<string> _logLines;
 
@@ -15,28 +22,51 @@
     /// Logs the message, writes the log file, and raises it as a real host error so it
     /// surfaces on the t4 console / VS Error List / Coder.App logs — rather than only
     /// landing in the generated output file, where it is easy to miss.
-    private void LogError(string message, string solutionFilePath) {
+    private void LogError(string message, string solutionFilePath, string targetDirectory = null) {
         Log("ERROR: " + message);
-        FlushLog(solutionFilePath);
+        FlushLog(solutionFilePath, targetDirectory);
         Error(message);
     }
 
-    private void FlushLog(string solutionFilePath) {
+    private void FlushLog(string solutionFilePath, string targetDirectory = null) {
         string folder = ResolveLogFolder(solutionFilePath);
         Directory.CreateDirectory(folder);
 
-        string templateName = string.IsNullOrWhiteSpace(Host.TemplateFile)
-            ? TemplateNameFallback
-            : Path.GetFileNameWithoutExtension(Host.TemplateFile);
-
-        string logPath = Path.Combine(folder, templateName + ".log.txt");
+        string logPath = Path.Combine(folder, BuildLogBaseName(solutionFilePath, targetDirectory) + ".log.txt");
 
         var sb = new StringBuilder();
-        sb.AppendLine("# " + templateName + " — run at " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
+        sb.AppendLine("# " + BuildLogBaseName(solutionFilePath, targetDirectory) + " — run at " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"));
         sb.AppendLine();
         foreach (string line in LogLines) sb.AppendLine(line);
 
         File.WriteAllText(logPath, sb.ToString());
+    }
+
+    /// Template name, plus the target directory relative to the solution root with
+    /// separators flattened — backslashes cannot appear in a file name, so the path is
+    /// flattened rather than nested.
+    private string BuildLogBaseName(string solutionFilePath, string targetDirectory) {
+        string templateName = string.IsNullOrWhiteSpace(Host.TemplateFile)
+            ? TemplateNameFallback
+            : Path.GetFileNameWithoutExtension(Host.TemplateFile);
+
+        if (string.IsNullOrWhiteSpace(targetDirectory) || string.IsNullOrWhiteSpace(solutionFilePath)) return templateName;
+
+        string solutionRoot = Path.GetDirectoryName(Path.GetFullPath(solutionFilePath));
+        if (string.IsNullOrWhiteSpace(solutionRoot)) return templateName;
+
+        string relative = MakeLogRelativePath(solutionRoot, Path.GetFullPath(targetDirectory));
+
+        // A target outside the solution tree has no meaningful relative form; fall back to
+        // its leaf folder rather than emitting a name full of ".." segments.
+        if (relative.StartsWith("..")) relative = Path.GetFileName(targetDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+        string flattened = relative
+            .Replace(Path.DirectorySeparatorChar, '_')
+            .Replace(Path.AltDirectorySeparatorChar, '_')
+            .Trim('_');
+
+        return string.IsNullOrWhiteSpace(flattened) ? templateName : templateName + "_" + flattened;
     }
 
     // Prefer {SolutionRoot}\CoderFiles, but fall back to the template's own folder when the
@@ -52,5 +82,21 @@
             : Path.GetDirectoryName(Host.TemplateFile);
 
         return string.IsNullOrWhiteSpace(templateFolder) ? Directory.GetCurrentDirectory() : templateFolder;
+    }
+
+    /// Path.GetRelativePath is unavailable in the template compile context; this is the
+    /// Uri-based equivalent used elsewhere in the template library.
+    private string MakeLogRelativePath(string basePath, string targetPath) {
+        if (string.IsNullOrEmpty(basePath) || string.IsNullOrEmpty(targetPath)) return targetPath;
+
+        if (!basePath.EndsWith(Path.DirectorySeparatorChar.ToString())) basePath += Path.DirectorySeparatorChar;
+        var baseUri = new Uri(basePath);
+        string targetWithSlash = targetPath.EndsWith(Path.DirectorySeparatorChar.ToString()) ? targetPath : targetPath + Path.DirectorySeparatorChar;
+        var targetUri = new Uri(targetWithSlash);
+
+        if (baseUri.Scheme != targetUri.Scheme) return targetPath;
+
+        string relative = Uri.UnescapeDataString(baseUri.MakeRelativeUri(targetUri).ToString());
+        return relative.Replace('/', Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar);
     }
 #>

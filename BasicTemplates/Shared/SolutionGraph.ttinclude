@@ -1,0 +1,270 @@
+<#+
+    // ============================================================
+    // Solution dependency graph.
+    //
+    // Reads the .slnx/.sln for the project list and each .csproj for its ProjectReference
+    // edges — MSBuild's own files, so the graph cannot drift from what actually builds.
+    //
+    // Tiers are computed in two phases:
+    //   Phase 1 — every project sits one below the DEEPEST project that references it
+    //   (longest path, not shortest). Views referencing both ViewModels and Models directly
+    //   is the case that requires this: since ViewModels also references Models, Models
+    //   belongs below ViewModels rather than beside it.
+    //
+    //   Phase 2 — a project nothing references is provisionally an entry point at tier 1,
+    //   which is wrong for something like a Data project that simply has no dependents.
+    //   Phase 2 pulls each such project down to just above its SHALLOWEST dependency.
+    //
+    // Test projects are detected structurally (an IsTestProject property or a known
+    // test-framework PackageReference), never by name, and are excluded from tiering.
+    // ============================================================
+
+    public class SolutionProject {
+        public string ProjectFilePath;
+        public string ProjectName;
+        public string ProjectDirectory;
+        public string RelativeDirectory = "";
+        public string RootNamespace;
+        public bool IsTestProject;
+        public int Tier = -1;
+        public List<SolutionProject> Dependencies = new List<SolutionProject>();
+        public List<SolutionProject> Parents = new List<SolutionProject>();
+
+        public override string ToString() { return ProjectName; }
+    }
+
+    private static readonly string[] TestFrameworkPackageMarkers = new string[] {
+        "Microsoft.NET.Test.Sdk", "xunit", "xunit.runner.visualstudio", "NUnit",
+        "MSTest.TestFramework", "MSTest.TestAdapter"
+    };
+
+    private Dictionary<string, SolutionProject> _solutionProjects;
+    private List<string> _graphDiagnostics;
+    private string _graphSolutionDirectory;
+
+    protected Dictionary<string, SolutionProject> SolutionProjects { get { return _solutionProjects; } }
+    protected List<string> GraphDiagnostics { get { return _graphDiagnostics ?? (_graphDiagnostics = new List<string>()); } }
+    protected string SolutionDirectory { get { return _graphSolutionDirectory; } }
+
+    /// Builds the graph. Call once, before any of the Find* helpers.
+    protected void BuildSolutionGraph(string solutionFilePath) {
+        _solutionProjects = new Dictionary<string, SolutionProject>(StringComparer.OrdinalIgnoreCase);
+        _graphDiagnostics = new List<string>();
+        _graphSolutionDirectory = Path.GetDirectoryName(Path.GetFullPath(solutionFilePath));
+
+        foreach (string projectPath in ReadSolutionProjectPaths(solutionFilePath)) {
+            if (!File.Exists(projectPath)) {
+                GraphDiagnostics.Add("Project listed in the solution was not found: " + projectPath);
+                continue;
+            }
+
+            var project = new SolutionProject();
+            project.ProjectFilePath = projectPath;
+            project.ProjectName = Path.GetFileNameWithoutExtension(projectPath);
+            project.ProjectDirectory = Path.GetDirectoryName(projectPath);
+            project.RootNamespace = project.ProjectName;
+
+            if (_solutionProjects.ContainsKey(project.ProjectName)) {
+                GraphDiagnostics.Add("Duplicate project name '" + project.ProjectName + "' — only the first is kept.");
+                continue;
+            }
+            _solutionProjects[project.ProjectName] = project;
+        }
+
+        foreach (var project in _solutionProjects.Values) {
+            project.RelativeDirectory = MakeRelativePath(_graphSolutionDirectory, project.ProjectDirectory);
+            ReadProjectFile(project);
+        }
+
+        ComputeTiersPhase1();
+        ComputeTiersPhase2();
+    }
+
+    private List<string> ReadSolutionProjectPaths(string solutionFilePath) {
+        var paths = new List<string>();
+        string solutionDirectory = Path.GetDirectoryName(Path.GetFullPath(solutionFilePath));
+
+        if (Path.GetExtension(solutionFilePath).Equals(".slnx", StringComparison.OrdinalIgnoreCase)) {
+            var doc = XDocument.Load(solutionFilePath);
+            foreach (var element in doc.Descendants("Project")) {
+                var attribute = element.Attribute("Path");
+                if (attribute == null || string.IsNullOrWhiteSpace(attribute.Value)) continue;
+                paths.Add(Path.GetFullPath(Path.Combine(solutionDirectory, attribute.Value.Replace('/', Path.DirectorySeparatorChar))));
+            }
+        }
+        else {
+            foreach (string line in File.ReadAllLines(solutionFilePath)) {
+                var match = Regex.Match(line, "Project\\(\"\\{[^}]+\\}\"\\)\\s*=\\s*\"[^\"]*\"\\s*,\\s*\"([^\"]+\\.csproj)\"", RegexOptions.IgnoreCase);
+                if (!match.Success) continue;
+                paths.Add(Path.GetFullPath(Path.Combine(solutionDirectory, match.Groups[1].Value.Replace('\\', Path.DirectorySeparatorChar))));
+            }
+        }
+
+        return paths;
+    }
+
+    private void ReadProjectFile(SolutionProject project) {
+        XDocument doc;
+        try { doc = XDocument.Load(project.ProjectFilePath); }
+        catch (Exception ex) {
+            GraphDiagnostics.Add("Could not read '" + project.ProjectFilePath + "': " + ex.Message);
+            return;
+        }
+
+        var rootNamespaceElement = doc.Descendants("RootNamespace").FirstOrDefault();
+        if (rootNamespaceElement != null && !string.IsNullOrWhiteSpace(rootNamespaceElement.Value))
+            project.RootNamespace = rootNamespaceElement.Value.Trim();
+
+        var isTestElement = doc.Descendants("IsTestProject").FirstOrDefault();
+        bool isTestFlag;
+        if (isTestElement != null && bool.TryParse(isTestElement.Value, out isTestFlag) && isTestFlag)
+            project.IsTestProject = true;
+
+        if (!project.IsTestProject) {
+            foreach (var package in doc.Descendants("PackageReference")) {
+                var include = package.Attribute("Include");
+                if (include == null || string.IsNullOrWhiteSpace(include.Value)) continue;
+                foreach (string marker in TestFrameworkPackageMarkers) {
+                    if (include.Value.Equals(marker, StringComparison.OrdinalIgnoreCase)) {
+                        project.IsTestProject = true;
+                        break;
+                    }
+                }
+                if (project.IsTestProject) break;
+            }
+        }
+
+        foreach (var reference in doc.Descendants("ProjectReference")) {
+            var include = reference.Attribute("Include");
+            if (include == null || string.IsNullOrWhiteSpace(include.Value)) continue;
+
+            string referencedPath = Path.GetFullPath(Path.Combine(project.ProjectDirectory, include.Value.Replace('\\', Path.DirectorySeparatorChar)));
+            string referencedName = Path.GetFileNameWithoutExtension(referencedPath);
+
+            SolutionProject referenced;
+            if (!_solutionProjects.TryGetValue(referencedName, out referenced)) {
+                GraphDiagnostics.Add("'" + project.ProjectName + "' references a project not listed in the solution: " + include.Value);
+                continue;
+            }
+
+            if (!project.Dependencies.Contains(referenced)) project.Dependencies.Add(referenced);
+            if (!referenced.Parents.Contains(project)) referenced.Parents.Add(project);
+        }
+    }
+
+    private void ComputeTiersPhase1() {
+        var production = _solutionProjects.Values.Where(p => !p.IsTestProject).ToList();
+        if (production.Count == 0) return;
+
+        foreach (var project in production) project.Tier = HasNoProductionParent(project) ? 1 : -1;
+
+        int maxIterations = production.Count + 1;
+        bool changed = true;
+
+        for (int i = 0; changed && i < maxIterations; i++) {
+            changed = false;
+            foreach (var project in production) {
+                var parents = project.Parents.Where(p => !p.IsTestProject).ToList();
+                if (parents.Count == 0) continue;
+                if (parents.Any(p => p.Tier < 0)) continue;
+
+                int candidate = parents.Max(p => p.Tier) + 1;
+                if (project.Tier != candidate) {
+                    project.Tier = candidate;
+                    changed = true;
+                }
+            }
+        }
+
+        var unresolved = production.Where(p => p.Tier < 0).ToList();
+        if (unresolved.Count > 0)
+            GraphDiagnostics.Add("Dependency cycle detected — tiers unresolved for: " + string.Join(", ", unresolved.Select(p => p.ProjectName)));
+    }
+
+    private void ComputeTiersPhase2() {
+        foreach (var project in _solutionProjects.Values.Where(p => !p.IsTestProject)) {
+            if (!HasNoProductionParent(project)) continue;
+
+            var dependencies = project.Dependencies.Where(d => !d.IsTestProject && d.Tier > 0).ToList();
+            if (dependencies.Count == 0) continue;
+
+            int adjusted = dependencies.Min(d => d.Tier) - 1;
+            if (project.Tier > 0 && adjusted > project.Tier) project.Tier = adjusted;
+        }
+    }
+
+    private bool HasNoProductionParent(SolutionProject project) {
+        return project.Parents.All(p => p.IsTestProject);
+    }
+
+    // ---------- search ----------
+
+    protected SolutionProject FindProjectByName(string projectName, bool includeTestProjects = false) {
+        return GraphCandidates(includeTestProjects).FirstOrDefault(p => p.ProjectName.Equals(projectName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    protected List<SolutionProject> FindProjectsByPattern(string pattern, bool includeTestProjects = false) {
+        string regex = "^" + Regex.Escape(pattern).Replace("\\*", ".*").Replace("\\?", ".") + "$";
+        return GraphCandidates(includeTestProjects).Where(p => Regex.IsMatch(p.ProjectName, regex, RegexOptions.IgnoreCase)).ToList();
+    }
+
+    protected List<SolutionProject> FindProjectsByTier(int tier, bool includeTestProjects = false) {
+        return GraphCandidates(includeTestProjects).Where(p => p.Tier == tier).ToList();
+    }
+
+    protected List<SolutionProject> FindTestProjects() {
+        return _solutionProjects.Values.Where(p => p.IsTestProject).ToList();
+    }
+
+    /// Production projects ordered shallowest first (entry points before their dependencies).
+    protected List<SolutionProject> ProductionProjectsByTier() {
+        return _solutionProjects.Values
+            .Where(p => !p.IsTestProject)
+            .OrderBy(p => p.Tier)
+            .ThenBy(p => p.ProjectName)
+            .ToList();
+    }
+
+    private IEnumerable<SolutionProject> GraphCandidates(bool includeTestProjects) {
+        return includeTestProjects ? _solutionProjects.Values : _solutionProjects.Values.Where(p => !p.IsTestProject);
+    }
+
+    // ---------- helpers ----------
+
+    private string MakeRelativePath(string basePath, string targetPath) {
+        if (string.IsNullOrEmpty(basePath) || string.IsNullOrEmpty(targetPath)) return targetPath;
+
+        if (!basePath.EndsWith(Path.DirectorySeparatorChar.ToString())) basePath += Path.DirectorySeparatorChar;
+        var baseUri = new Uri(basePath);
+        string targetWithSlash = targetPath.EndsWith(Path.DirectorySeparatorChar.ToString()) ? targetPath : targetPath + Path.DirectorySeparatorChar;
+        var targetUri = new Uri(targetWithSlash);
+
+        if (baseUri.Scheme != targetUri.Scheme) return targetPath;
+
+        string relative = Uri.UnescapeDataString(baseUri.MakeRelativeUri(targetUri).ToString());
+        relative = relative.Replace('/', Path.DirectorySeparatorChar).TrimEnd(Path.DirectorySeparatorChar);
+        return relative;
+    }
+
+    /// Human-readable dump for troubleshooting.
+    protected string DescribeSolutionGraph() {
+        var sb = new StringBuilder();
+        sb.AppendLine("Projects: " + _solutionProjects.Count + " (" + FindTestProjects().Count + " test)");
+        sb.AppendLine();
+
+        foreach (var project in _solutionProjects.Values.OrderBy(p => p.Tier < 0 ? int.MaxValue : p.Tier).ThenBy(p => p.ProjectName)) {
+            sb.AppendLine("[Tier " + (project.Tier < 0 ? "-" : project.Tier.ToString()) + "] " + project.ProjectName + (project.IsTestProject ? "  [TEST]" : ""));
+            sb.AppendLine("    Namespace  : " + project.RootNamespace);
+            sb.AppendLine("    Directory  : " + project.RelativeDirectory.Replace('\\', '/'));
+            sb.AppendLine("    Depends on : " + (project.Dependencies.Count == 0 ? "(none)" : string.Join(", ", project.Dependencies.Select(d => d.ProjectName))));
+        }
+
+        if (GraphDiagnostics.Count > 0) {
+            sb.AppendLine();
+            sb.AppendLine("DIAGNOSTICS:");
+            foreach (string diagnostic in GraphDiagnostics) sb.AppendLine("  - " + diagnostic);
+        }
+
+        return sb.ToString();
+    }
+#>

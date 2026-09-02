@@ -1,0 +1,344 @@
+<#@ template language="C#" hostspecific="true" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Xml" #>
+<#@ assembly name="System.Xml.Linq" #>
+<#@ assembly name="System.Memory" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Text.RegularExpressions" #>
+<#@ import namespace="System.Xml.Linq" #>
+<#@ include file="../Shared/TemplateArguments.ttinclude" #>
+<#@ include file="../Shared/TemplateLog.ttinclude" #>
+<#@ include file="../Shared/SolutionGraph.ttinclude" #>
+<#@ include file="../Shared/TargetFolders.ttinclude" #>
+<#
+    // ============================================================
+    // TARGET FOLDERS — where this template writes, relative to each project's root.
+    // Created if absent. Edit these to match a different solution's conventions; the
+    // generation code below never contains a literal path.
+    //
+    //   Key      how the template refers to the folder
+    //   Path     relative to the project root; "" means the root itself
+    //   Patterns wildcard match against the PROJECT NAME. Positives OR together; a
+    //            pattern prefixed with '!' excludes and always wins. Omit for all projects.
+    //            e.g. new[] { "*.Views", "*.ViewModels" }   or   new[] { "!*.Legacy" }
+    //
+    // When two entries match the same project for one key, the FIRST wins and the
+    // ambiguity is logged as a warning.
+    // ============================================================
+    var TargetFolders = new[] {
+        new TargetFolder("DI",   "DI"),   // attribute, interfaces — grouped to reduce root noise
+        new TargetFolder("Root", "")      // ServiceCollectionExtensions — the DI entry point
+    };
+
+    // ============================================================
+    // ARGUMENTS (read from {SolutionRoot}\CoderFiles\DISetup.args.txt)
+    //
+    //   SolutionFilePath  (required) — full path to the .slnx/.sln to set up.
+    //
+    // Generates, into the ROOT FOLDER of every production project (test projects skipped):
+    //
+    //   RegisterAttribute.g.cs             — declares how a type registers itself
+    //   IAddRegistrations.g.cs             — contributes registrations for types it does not own
+    //   IOverrideRegistrations.g.cs        — replaces registrations deliberately
+    //   ServiceCollectionExtensions.g.cs   — AddRegistrations + ApplyRegistrations
+    //
+    // Every project gets its own copy rather than referencing a shared one, so no project is
+    // forced to depend on Infrastructure purely to obtain the DI mechanism. The duplication is
+    // generated, never hand-maintained.
+    //
+    // Namespaces come from each project's RootNamespace (read from its .csproj, not inferred
+    // from the folder name — the two can legitimately differ).
+    // ============================================================
+
+    if (!HasArguments) {
+        LogError($"No arguments file found. Looked at: {ArgumentsFilePathForDiagnostics}", null);
+        return string.Empty;
+    }
+
+    string solutionFilePath = GetArgument("SolutionFilePath");
+    if (string.IsNullOrWhiteSpace(solutionFilePath)) {
+        LogError($"SolutionFilePath is missing from {ArgumentsFilePathForDiagnostics}", null);
+        return string.Empty;
+    }
+
+    if (!File.Exists(solutionFilePath)) {
+        LogError($"Solution file does not exist: {solutionFilePath}", null);
+        return string.Empty;
+    }
+
+    Log($"Arguments file  : {ArgumentsFilePathForDiagnostics}");
+    Log($"SolutionFilePath: {solutionFilePath}");
+
+    BuildSolutionGraph(solutionFilePath);
+
+    foreach (string diagnostic in GraphDiagnostics) Log("GRAPH: " + diagnostic);
+
+    var projects = ProductionProjectsByTier();
+    if (projects.Count == 0) {
+        LogError("No production projects found in the solution.", solutionFilePath);
+        return string.Empty;
+    }
+
+    Log($"Production projects: {projects.Count}, test projects skipped: {FindTestProjects().Count}");
+    Log("");
+
+    int filesWritten = 0;
+
+    foreach (var project in projects) {
+        Log($"[Tier {project.Tier}] {project.ProjectName}  (namespace {project.RootNamespace})");
+
+        var directDependencies = project.Dependencies.Where(d => !d.IsTestProject).OrderBy(d => d.ProjectName).ToList();
+        if (directDependencies.Count > 0)
+            Log($"    cascades into: {string.Join(", ", directDependencies.Select(d => d.ProjectName))}");
+
+        string diFolder = ResolveTargetFolder(TargetFolders, "DI", project);
+        string rootFolder = ResolveTargetFolder(TargetFolders, "Root", project);
+        Log("    DI folder    : " + MakeRelativePath(project.ProjectDirectory, diFolder));
+
+        WriteGeneratedFile(diFolder, "RegisterAttribute.g.cs", BuildRegisterAttribute(project), ref filesWritten);
+        WriteGeneratedFile(diFolder, "IAddRegistrations.g.cs", BuildAddRegistrationsInterface(project), ref filesWritten);
+        WriteGeneratedFile(diFolder, "IOverrideRegistrations.g.cs", BuildOverrideRegistrationsInterface(project), ref filesWritten);
+        WriteGeneratedFile(rootFolder, "ServiceCollectionExtensions.g.cs", BuildServiceCollectionExtensions(project, directDependencies), ref filesWritten);
+    }
+
+    Log("");
+    Log($"Done. {filesWritten} file(s) written.");
+
+    FlushLog(solutionFilePath);
+
+    Write($"DI setup complete: {filesWritten} file(s) across {projects.Count} project(s).");
+#>
+<#+
+    // Required by TemplateArguments.ttinclude and TemplateLog.ttinclude: under the t4 CLI,
+    // Host.TemplateFile is empty, so the template cannot discover its own name.
+    private string TemplateNameFallback { get { return "DISetup"; } }
+
+    private void WriteGeneratedFile(string folder, string fileName, string content, ref int counter) {
+        string path = Path.Combine(folder, fileName);
+        File.WriteAllText(path, content);
+        Log("    wrote " + fileName);
+        counter++;
+    }
+
+    private string GeneratedBanner(string sourceDescription) {
+        var sb = new StringBuilder();
+        sb.AppendLine("// <auto-generated>");
+        sb.AppendLine("//     Generated by the DISetup template. Do not edit — regenerated on every run.");
+        sb.AppendLine("//     " + sourceDescription);
+        sb.AppendLine("// </auto-generated>");
+        sb.AppendLine();
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine();
+        return sb.ToString();
+    }
+
+    private string BuildRegisterAttribute(SolutionProject project) {
+        var sb = new StringBuilder();
+        sb.Append(GeneratedBanner("Declares how a type registers itself with the DI container."));
+        sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
+        sb.AppendLine();
+        sb.AppendLine("namespace " + project.RootNamespace + ";");
+        sb.AppendLine();
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine("/// Marks a class for automatic DI registration. Applied to the implementation; the");
+        sb.AppendLine("/// service type defaults to the class itself when not given.");
+        sb.AppendLine("///");
+        sb.AppendLine("/// AllowMultiple, so one class can be resolvable under several interfaces.");
+        sb.AppendLine("/// </summary>");
+        sb.AppendLine("[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]");
+        sb.AppendLine("public sealed class RegisterAttribute : Attribute {");
+        sb.AppendLine();
+        sb.AppendLine("    public Type? ServiceType { get; }");
+        sb.AppendLine("    public ServiceLifetime Lifetime { get; }");
+        sb.AppendLine();
+        sb.AppendLine("    public RegisterAttribute(ServiceLifetime lifetime = ServiceLifetime.Singleton) {");
+        sb.AppendLine("        Lifetime = lifetime;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    public RegisterAttribute(Type serviceType, ServiceLifetime lifetime = ServiceLifetime.Singleton) {");
+        sb.AppendLine("        ServiceType = serviceType;");
+        sb.AppendLine("        Lifetime = lifetime;");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    private string BuildAddRegistrationsInterface(SolutionProject project) {
+        var sb = new StringBuilder();
+        sb.Append(GeneratedBanner("Contributes registrations for types this class does not own."));
+        sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
+        sb.AppendLine();
+        sb.AppendLine("namespace " + project.RootNamespace + ";");
+        sb.AppendLine();
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine("/// Registers types this class does not own — a scaffolded entity, a hand-written class,");
+        sb.AppendLine("/// anything a [Register] attribute cannot reach because the type cannot be decorated.");
+        sb.AppendLine("///");
+        sb.AppendLine("/// Any number of implementations may coexist, so several templates can contribute to");
+        sb.AppendLine("/// the same project independently. Registrations made here are VALIDATED: two sources");
+        sb.AppendLine("/// registering the same service type without declaring intent to override is an error.");
+        sb.AppendLine("/// To replace an existing registration deliberately, use IOverrideRegistrations.");
+        sb.AppendLine("///");
+        sb.AppendLine("/// Implementations need a public parameterless constructor.");
+        sb.AppendLine("/// </summary>");
+        sb.AppendLine("public interface IAddRegistrations {");
+        sb.AppendLine("    void AddRegistrations(IServiceCollection services);");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    private string BuildOverrideRegistrationsInterface(SolutionProject project) {
+        var sb = new StringBuilder();
+        sb.Append(GeneratedBanner("Replaces registrations deliberately."));
+        sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
+        sb.AppendLine();
+        sb.AppendLine("namespace " + project.RootNamespace + ";");
+        sb.AppendLine();
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine("/// Replaces registrations made earlier. Runs after the attribute scan and after every");
+        sb.AppendLine("/// IAddRegistrations contributor, and is NOT subject to duplicate validation — replacing");
+        sb.AppendLine("/// is the declared intent, expressed as one statement rather than a remove followed by");
+        sb.AppendLine("/// an add.");
+        sb.AppendLine("///");
+        sb.AppendLine("/// This is the mechanism for resolving a conflict between two independently generated");
+        sb.AppendLine("/// registrations, and the natural home for test substitutions.");
+        sb.AppendLine("///");
+        sb.AppendLine("/// Use plain Add* calls; the mechanism removes whatever the same service type was");
+        sb.AppendLine("/// registered as before.");
+        sb.AppendLine("/// </summary>");
+        sb.AppendLine("public interface IOverrideRegistrations {");
+        sb.AppendLine("    void ReplaceRegistrations(IServiceCollection services);");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    private string BuildServiceCollectionExtensions(SolutionProject project, List<SolutionProject> directDependencies) {
+        var sb = new StringBuilder();
+        sb.Append(GeneratedBanner("DI entry point for this project."));
+        sb.AppendLine("using System.Reflection;");
+        sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
+        sb.AppendLine();
+        sb.AppendLine("namespace " + project.RootNamespace + ";");
+        sb.AppendLine();
+        sb.AppendLine("public static partial class ServiceCollectionExtensions {");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Registers this project and everything it depends on. Direct dependencies only —");
+        sb.AppendLine("    /// transitivity handles the rest. Calls are fully qualified because every project");
+        sb.AppendLine("    /// declares a method of the same name.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    public static IServiceCollection AddRegistrations(this IServiceCollection services) {");
+
+        if (directDependencies.Count == 0) {
+            sb.AppendLine("        // No project dependencies — this is the deepest tier.");
+        }
+        else {
+            // global:: forces resolution from the root namespace. Without it, a project whose
+            // own namespace happens to nest a segment matching a dependency's root (e.g. a
+            // test project under TBQuiz90.Tests.TBQuiz06.Data) resolves the call relative to
+            // itself and fails to find the type.
+            foreach (var dependency in directDependencies)
+                sb.AppendLine("        global::" + dependency.RootNamespace + ".ServiceCollectionExtensions.AddRegistrations(services);");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("        ApplyRegistrations(services, typeof(ServiceCollectionExtensions).Assembly);");
+        sb.AppendLine();
+        sb.AppendLine("        // Hand-written registrations the attribute scan cannot express — a factory lambda,");
+        sb.AppendLine("        // an internal constructor, a conditional lifetime. Implement in a separate file;");
+        sb.AppendLine("        // if nothing implements it the call compiles away to nothing.");
+        sb.AppendLine("        AddManualRegistrations(services);");
+        sb.AppendLine();
+        sb.AppendLine("        return services;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    static partial void AddManualRegistrations(IServiceCollection services);");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Scans one assembly and applies every registration it declares, in four steps:");
+        sb.AppendLine("    ///");
+        sb.AppendLine("    ///   1. [Register] attributes — a type declaring how it registers itself.");
+        sb.AppendLine("    ///   2. IAddRegistrations contributors — classes registering types they do not own.");
+        sb.AppendLine("    ///   3. Validation over the finished collection. Deliberately deferred to the end so");
+        sb.AppendLine("    ///      every conflict is reported at once rather than failing on the first.");
+        sb.AppendLine("    ///   4. IOverrideRegistrations contributors, each superseding what came before.");
+        sb.AppendLine("    ///");
+        sb.AppendLine("    /// A project referenced by two parents has AddRegistrations called twice, so its");
+        sb.AppendLine("    /// registrations appear twice. That is a harmless repeat, not a conflict, and step 3");
+        sb.AppendLine("    /// distinguishes them: identical descriptors are collapsed, differing ones throw.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    public static IServiceCollection ApplyRegistrations(IServiceCollection services, Assembly assembly) {");
+        sb.AppendLine("        var types = assembly.GetTypes().Where(t => t is { IsClass: true, IsAbstract: false }).ToList();");
+        sb.AppendLine();
+        sb.AppendLine("        // 1. Attribute-declared registrations.");
+        sb.AppendLine("        foreach (var type in types) {");
+        sb.AppendLine("            foreach (var attribute in type.GetCustomAttributes<RegisterAttribute>()) {");
+        sb.AppendLine("                var serviceType = attribute.ServiceType ?? type;");
+        sb.AppendLine("                switch (attribute.Lifetime) {");
+        sb.AppendLine("                    case ServiceLifetime.Singleton: services.AddSingleton(serviceType, type); break;");
+        sb.AppendLine("                    case ServiceLifetime.Scoped:    services.AddScoped(serviceType, type); break;");
+        sb.AppendLine("                    case ServiceLifetime.Transient: services.AddTransient(serviceType, type); break;");
+        sb.AppendLine("                }");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        // 2. Contributors registering types they do not own.");
+        sb.AppendLine("        foreach (var type in types.Where(t => typeof(IAddRegistrations).IsAssignableFrom(t))) {");
+        sb.AppendLine("            var contributor = (IAddRegistrations)Activator.CreateInstance(type)!;");
+        sb.AppendLine("            contributor.AddRegistrations(services);");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        // 3. Validate once, over the finished collection. A group whose descriptors are all");
+        sb.AppendLine("        //    identical is the diamond-dependency repeat — collapse it. A group that differs");
+        sb.AppendLine("        //    in implementation or lifetime is a genuine conflict.");
+        sb.AppendLine("        var duplicateGroups = services");
+        sb.AppendLine("            .GroupBy(descriptor => descriptor.ServiceType)");
+        sb.AppendLine("            .Where(group => group.Count() > 1)");
+        sb.AppendLine("            .ToList();");
+        sb.AppendLine();
+        sb.AppendLine("        var conflicts = duplicateGroups");
+        sb.AppendLine("            .Where(group => group.Select(d => (d.ImplementationType, d.Lifetime)).Distinct().Count() > 1)");
+        sb.AppendLine("            .ToList();");
+        sb.AppendLine();
+        sb.AppendLine("        if (conflicts.Count > 0) {");
+        sb.AppendLine("            string detail = string.Join(Environment.NewLine, conflicts.Select(group =>");
+        sb.AppendLine("                \"  \" + group.Key.FullName + \" -> \" +");
+        sb.AppendLine("                string.Join(\", \", group.Select(d => (d.ImplementationType?.FullName ?? \"(factory)\") + \" (\" + d.Lifetime + \")\"))));");
+        sb.AppendLine();
+        sb.AppendLine("            throw new InvalidOperationException(");
+        sb.AppendLine("                \"Conflicting DI registrations in '\" + assembly.GetName().Name + \"':\" + Environment.NewLine + detail + Environment.NewLine +");
+        sb.AppendLine("                \"Use IOverrideRegistrations to replace a registration deliberately.\");");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        CollapseDuplicates(services);");
+        sb.AppendLine();
+        sb.AppendLine("        // 4. Overrides, each replacing whatever the same service type was registered as.");
+        sb.AppendLine("        foreach (var type in types.Where(t => typeof(IOverrideRegistrations).IsAssignableFrom(t))) {");
+        sb.AppendLine("            var contributor = (IOverrideRegistrations)Activator.CreateInstance(type)!;");
+        sb.AppendLine("            contributor.ReplaceRegistrations(services);");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        CollapseDuplicates(services);");
+        sb.AppendLine();
+        sb.AppendLine("        return services;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>Keeps only the LAST descriptor for each service type — appends win, which");
+        sb.AppendLine("    /// is what makes an override supersede what it replaces.</summary>");
+        sb.AppendLine("    private static void CollapseDuplicates(IServiceCollection services) {");
+        sb.AppendLine("        var groups = services");
+        sb.AppendLine("            .GroupBy(descriptor => descriptor.ServiceType)");
+        sb.AppendLine("            .Where(group => group.Count() > 1)");
+        sb.AppendLine("            .ToList();");
+        sb.AppendLine();
+        sb.AppendLine("        foreach (var group in groups) {");
+        sb.AppendLine("            foreach (var stale in group.Take(group.Count() - 1).ToList()) services.Remove(stale);");
+        sb.AppendLine("        }");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+#>

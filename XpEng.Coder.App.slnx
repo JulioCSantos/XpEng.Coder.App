@@ -6,10 +6,13 @@
     <File Path="MainModelGraph.tt" />
   </Folder>
   <Folder Name="/BasicTemplates/Shared/">
+    <File Path="BasicTemplates/Shared/SolutionGraph.ttinclude" />
+    <File Path="BasicTemplates/Shared/TargetFolders.ttinclude" />
     <File Path="BasicTemplates/Shared/TemplateArguments.ttinclude" />
     <File Path="BasicTemplates/Shared/TemplateLog.ttinclude" />
   </Folder>
   <Folder Name="/BasicTemplates/WPF/">
+    <File Path="BasicTemplates/WPF/DISetup.tt" />
     <File Path="BasicTemplates/WPF/PlanSetup.tt" />
   </Folder>
   <Project Path="XpEng.Coder/XpEng.Coder03.Views/XpEng.Coder03.Views.csproj" />

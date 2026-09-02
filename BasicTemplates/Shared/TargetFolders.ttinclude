@@ -1,0 +1,105 @@
+<#+
+    // ============================================================
+    // Target folder resolution.
+    //
+    // A template declares WHERE it writes at the top of the file; this include resolves
+    // those declarations against a project. The template body never contains a literal
+    // path — every write goes through ResolveTargetFolder(key, project) — so adapting a
+    // template to a different solution's conventions means editing only the declaration.
+    //
+    // Folders are created if absent: a template that generates code owns where it writes.
+    // ============================================================
+
+    public class TargetFolder {
+
+        /// How the template refers to this folder.
+        public string Key;
+
+        /// Relative to the matching project's root. "" means the project root itself.
+        public string Path;
+
+        /// Wildcard patterns matched against the PROJECT NAME. Positives OR together; a
+        /// pattern prefixed with '!' excludes and always wins. Null or empty means every
+        /// project. Examples:
+        ///     new[] { "*.Views", "*.ViewModels" }   only those two kinds
+        ///     new[] { "!*.Legacy" }                 everything except Legacy
+        ///     new[] { "*.Views", "!*.Legacy" }      Views, unless also Legacy
+        public string[] ProjectPatterns;
+
+        public TargetFolder(string key, string path, string[] projectPatterns = null) {
+            Key = key;
+            Path = path;
+            ProjectPatterns = projectPatterns;
+        }
+    }
+
+    /// Resolves a declared folder for one project, creating it if absent.
+    ///
+    /// When several declarations match the same project for the same key, the FIRST wins —
+    /// list order is visible in the template, so resolution is predictable by reading it —
+    /// and the ambiguity is logged as a warning rather than treated as an error.
+    ///
+    /// A key that matches NO declaration for the project throws: the template is asking
+    /// where to write and the configuration does not say. Silently defaulting to the project
+    /// root would scatter files unpredictably.
+    protected string ResolveTargetFolder(TargetFolder[] folders, string key, SolutionProject project) {
+        var matches = folders
+            .Where(f => f.Key.Equals(key, StringComparison.OrdinalIgnoreCase))
+            .Where(f => ProjectMatchesPatterns(project.ProjectName, f.ProjectPatterns))
+            .ToList();
+
+        if (matches.Count == 0) {
+            var declaredKeys = folders.Select(f => f.Key).Distinct().OrderBy(k => k);
+            throw new InvalidOperationException(
+                "No target folder declared for key '" + key + "' matching project '" + project.ProjectName + "'. " +
+                "Declared keys: " + string.Join(", ", declaredKeys) + ".");
+        }
+
+        var chosen = matches[0];
+
+        if (matches.Count > 1) {
+            Log("WARNING: folder key '" + key + "' matches " + project.ProjectName + " in " + matches.Count +
+                " entries (" + string.Join(", ", matches.Select(m => "\"" + m.Path + "\"")) +
+                "). Using \"" + chosen.Path + "\" (first declared).");
+        }
+
+        string absolute = string.IsNullOrWhiteSpace(chosen.Path)
+            ? project.ProjectDirectory
+            : System.IO.Path.Combine(project.ProjectDirectory, chosen.Path.Replace('/', System.IO.Path.DirectorySeparatorChar));
+
+        Directory.CreateDirectory(absolute);
+        return absolute;
+    }
+
+    /// Positives OR together; a '!'-prefixed pattern excludes and always wins. No patterns
+    /// at all means every project matches.
+    private bool ProjectMatchesPatterns(string projectName, string[] patterns) {
+        if (patterns == null || patterns.Length == 0) return true;
+
+        bool hasPositive = false;
+        bool matchedPositive = false;
+
+        foreach (string pattern in patterns) {
+            if (string.IsNullOrWhiteSpace(pattern)) continue;
+
+            bool isNegation = pattern.StartsWith("!");
+            string bare = isNegation ? pattern.Substring(1) : pattern;
+
+            if (isNegation) {
+                if (WildcardMatches(projectName, bare)) return false;
+                continue;
+            }
+
+            hasPositive = true;
+            if (WildcardMatches(projectName, bare)) matchedPositive = true;
+        }
+
+        // A list of nothing but exclusions means "everything except those".
+        return hasPositive ? matchedPositive : true;
+    }
+
+    private bool WildcardMatches(string value, string pattern) {
+        string regex = "^" + Regex.Escape(pattern).Replace("\\*", ".*").Replace("\\?", ".") + "$";
+        return Regex.IsMatch(value, regex, RegexOptions.IgnoreCase);
+    }
+#>
