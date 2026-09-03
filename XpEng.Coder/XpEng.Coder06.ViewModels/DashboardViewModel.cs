@@ -9,6 +9,7 @@ using XpEng.Coder09.Models.Entities;
 using XpEng.Coder09.Models.Transport;
 using XpEng.Coder12.Services;
 using XpEng.Coder12.Services.T4Pipeline;
+using XpEng.Coder80.Infrastructure;
 using XpEng.Coder80.Infrastructure.Interfaces;
 using XpEng.Coder80.Infrastructure.Services;
 
@@ -17,7 +18,7 @@ namespace XpEng.Coder06.ViewModels {
     public partial class DashboardViewModel : ViewModelBase, IDisposable {
 
         #region Properties
-        private IEngineLogger Logger => DIExtensions.ServiceProvider.GetRequiredService<IEngineLogger>();
+        private IEngineLogger Logger => ApplicationServices.Provider.GetRequiredService<IEngineLogger>();
 
         #region Watcher
         private DirectoriesWatcher? _watcher;
@@ -402,7 +403,7 @@ namespace XpEng.Coder06.ViewModels {
                             string.IsNullOrEmpty(changeEvent.OldFileName) ? null : Path.Combine(affectedSource.SourcePath.FullName, changeEvent.OldFileName)
                         )).ToList();
 
-                        var caller = DIExtensions.ServiceProvider.GetRequiredService<ITemplatesCaller>();
+                        var caller = ApplicationServices.Provider.GetRequiredService<ITemplatesCaller>();
                         await caller.ProcessBatchAsync(affectedPlan.PlanName, activeTargets, fileChanges);
                     }
                     catch (Exception ex) {
@@ -435,7 +436,7 @@ namespace XpEng.Coder06.ViewModels {
         private async Task ForceSync() {
             SaveConfigurationInternal(isAutoSave: true);
 
-            var caller = DIExtensions.ServiceProvider.GetRequiredService<ITemplatesCaller>();
+            var caller = ApplicationServices.Provider.GetRequiredService<ITemplatesCaller>();
 
             foreach (var plan in MainModel.Instance.PlanOrchestrators.Where(p => p.IsMonitored)) {
 

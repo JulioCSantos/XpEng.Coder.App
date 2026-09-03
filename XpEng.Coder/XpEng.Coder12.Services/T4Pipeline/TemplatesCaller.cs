@@ -14,8 +14,8 @@ namespace XpEng.Coder12.Services.T4Pipeline;
 [Register(typeof(ITemplatesCaller), ServiceLifetime.Transient)]
 public class TemplatesCaller : ITemplatesCaller {
 
-    private IEngineLogger Logger => DIExtensions.ServiceProvider.GetRequiredService<IEngineLogger>();
-    private TemplateCallerClient Caller => DIExtensions.ServiceProvider.GetRequiredService<TemplateCallerClient>();
+    private IEngineLogger Logger => ApplicationServices.Provider.GetRequiredService<IEngineLogger>();
+    private TemplateCallerClient Caller => ApplicationServices.Provider.GetRequiredService<TemplateCallerClient>();
 
     public async Task ProcessBatchAsync(string planName, IEnumerable<GenerationTarget> targets, IEnumerable<FileChange> fileChanges) {
         try {

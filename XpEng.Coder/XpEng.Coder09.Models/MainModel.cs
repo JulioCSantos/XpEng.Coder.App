@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using XpEng.Coder09.Models.Entities;
 using XpEng.Coder09.Models.Transport;
+using XpEng.Coder80.Infrastructure;
 using XpEng.Coder80.Infrastructure.Interfaces;
 using XpEng.Coder80.Infrastructure.Services;
 
@@ -26,7 +27,7 @@ public class MainModel {
         get {
             if (_configPersistence != null) return _configPersistence;
 
-            _configPersistence = DIExtensions.ServiceProvider.GetRequiredService<IConfigPersistence>()
+            _configPersistence = ApplicationServices.Provider.GetRequiredService<IConfigPersistence>()
                                  ?? throw new InvalidOperationException("IConfigPersistence is not registered in the DI container.");
 
             return _configPersistence;

@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using XpEng.Coder06.ViewModels;
+using XpEng.Coder80.Infrastructure;
 using XpEng.Coder80.Infrastructure.Services;
 
 namespace XpEng.Coder03.Views {
@@ -12,7 +13,7 @@ namespace XpEng.Coder03.Views {
         #region MainViewModel
         private MainViewModel? _mainViewModel;
         public MainViewModel MainViewModel {
-            get { return _mainViewModel ??= DIExtensions.ServiceProvider.GetRequiredService<MainViewModel>(); }
+            get { return _mainViewModel ??= ApplicationServices.Provider.GetRequiredService<MainViewModel>(); }
             protected set => _mainViewModel = value;
         }
         #endregion MainViewModel

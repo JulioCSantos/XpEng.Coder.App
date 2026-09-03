@@ -1,17 +1,32 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using XpEng.Coder09.Models;
 using XpEng.Coder09.Models.Entities;
+using XpEng.Coder80.Infrastructure;
 using XpEng.Coder80.Infrastructure.Services;
 
 namespace XpEng.Coder90.Tests.XpEng.Coder09.Models;
 
 [TestClass]
 public class MainModelTests {
+    private ServiceProvider _provider = null!;
+    private IDisposable _scope = null!;
+
     [TestInitialize]
     public void Setup() {
-        //Set DI factories
-        IServiceCollection servColl = DIExtensions.ServiceCollection;
-        servColl.AddModels();
+        // The collection is a local now — ApplicationServices holds only the built provider.
+        var services = new ServiceCollection();
+        services.AddModels();
+        _provider = services.BuildServiceProvider();
+
+        // MainModel.Instance goes through the locator, so scope it to this test's container.
+        // AsyncLocal, so it survives an await and does not leak into a parallel test.
+        _scope = ApplicationServices.UseProvider(_provider);
+    }
+
+    [TestCleanup]
+    public void Cleanup() {
+        _scope.Dispose();
+        _provider.Dispose();
     }
 
     [TestMethod]

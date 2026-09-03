@@ -7,6 +7,7 @@ using System.Windows;
 using XpEng.Coder03.Views.Views;
 using XpEng.Coder06.ViewModels;
 using XpEng.Coder12.Services.T4Pipeline;
+using XpEng.Coder80.Infrastructure;
 using XpEng.Coder80.Infrastructure.Interfaces;
 using XpEng.Coder80.Infrastructure.Services;
 
@@ -37,17 +38,21 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e) {
 
-        DIExtensions.ServiceCollection.AddViews();
-        DIExtensions.Build();
+        // The collection is a local now rather than a static on ApplicationServices: it exists only
+        // long enough to build the provider, and ApplicationServices holds the result.
+        var services = new ServiceCollection();
+        services.AddViews();
+        ApplicationServices.Initialize(services.BuildServiceProvider());
+
         _ = WarmUpT4HostAsync();
-        var mainView = DIExtensions.ServiceProvider.GetRequiredService<MainView>();
+        var mainView = ApplicationServices.Provider.GetRequiredService<MainView>();
         mainView.Show();
         base.OnStartup(e);
     }
 
     private static async Task WarmUpT4HostAsync() {
         try { await T4HostServer.Instance.EnsureStartedAsync(CancellationToken.None).ConfigureAwait(false); }
-        catch (Exception ex) { DIExtensions.ServiceProvider.GetRequiredService<IEngineLogger>().Log($"T4 host warm-up failed: {ex.Message}"); }
+        catch (Exception ex) { ApplicationServices.Provider.GetRequiredService<IEngineLogger>().Log($"T4 host warm-up failed: {ex.Message}"); }
     }
 
     protected override void OnExit(ExitEventArgs e) {

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using XpEng.Coder80.Infrastructure;
 using XpEng.Coder80.Infrastructure.Interfaces;
 using XpEng.Coder80.Infrastructure.Services;
 // Add your other required using statements for WatcherConfig and DirectoryChangedEventArgs
@@ -29,7 +30,7 @@ namespace XpEng.Coder12.Services {
         private readonly Channel<List<DirectoryChangedEventArgs>> _eventChannel = Channel.CreateUnbounded<List<DirectoryChangedEventArgs>>();
 
         // Dynamically resolve logger exactly like the ViewModel does
-        private IEngineLogger Logger => DIExtensions.ServiceProvider.GetRequiredService<IEngineLogger>();
+        private IEngineLogger Logger => ApplicationServices.Provider.GetRequiredService<IEngineLogger>();
 
         public bool IsRunning { get; private set; }
 

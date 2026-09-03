@@ -8,7 +8,7 @@ public static class DesignTimeSingleton<T> where T : class {
 
     public static T Resolve(Func<T> constructFallback) {
         try {
-            return DIExtensions.ServiceProvider.GetRequiredService<T>();
+            return ApplicationServices.Provider.GetRequiredService<T>();
         }
         catch {
             if (!DesignTimeDetector.IsInDesignMode) throw;

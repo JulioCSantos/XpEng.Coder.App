@@ -19,4 +19,8 @@
     <ProjectReference Include="..\XpEng.Coder80.Infrastructure\XpEng.Coder80.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Interfaces\" />
+  </ItemGroup>
+
 </Project>

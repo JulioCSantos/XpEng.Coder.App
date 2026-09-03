@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="XpEng.Coder80.Infrastructure\ApplicationServicesTests.cs" />
     <Compile Include="XpEng.Coder80.Infrastructure\SolutionDependencyGraph.cs" />
     <Compile Include="XpEng.Coder80.Infrastructure\SolutionDependencyGraphTests.cs" />
   </ItemGroup>
@@ -43,6 +44,10 @@
 
   <ItemGroup>
     <PackageReference Update="MSTest.TestFramework" Version="4.3.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="XpEng.Coder06.Data\" />
   </ItemGroup>
 
 </Project>

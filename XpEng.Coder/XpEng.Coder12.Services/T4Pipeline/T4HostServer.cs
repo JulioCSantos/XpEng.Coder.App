@@ -1,6 +1,7 @@
 ﻿using MessagePack;
 using Microsoft.Extensions.DependencyInjection;
 using System.IO.Pipes;
+using XpEng.Coder80.Infrastructure;
 using XpEng.Coder80.Infrastructure.Interfaces;
 using XpEng.Coder80.Infrastructure.Services;
 using XpEng.Coder80.Infrastructure.T4Pipeline;
@@ -20,11 +21,11 @@ public sealed class T4HostServer : IDisposable {
         get {
             lock (InstanceLock) {
                 if (_instance is { Status: T4HostStatus.Disposed }) _instance = null;
-                return _instance ??= new T4HostServer(DIExtensions.ServiceProvider.GetRequiredService<TemplateCompilerService>());
+                return _instance ??= new T4HostServer(ApplicationServices.Provider.GetRequiredService<TemplateCompilerService>());
             }
         }
     }
-    private IEngineLogger Logger => DIExtensions.ServiceProvider.GetRequiredService<IEngineLogger>();
+    private IEngineLogger Logger => ApplicationServices.Provider.GetRequiredService<IEngineLogger>();
     private readonly TemplateCompilerService _compiler;
     private readonly CancellationTokenSource _lifetimeCts = new();
     private readonly SemaphoreSlim _startGate = new(1, 1);

@@ -12,14 +12,12 @@
 
   <ItemGroup>
     <Compile Remove="ColumnListBoxTestWindow.xaml.cs" />
-    <Compile Remove="Controls\PathPickerControl.xaml.cs" />
     <Compile Remove="Controls\PathTextBox.cs" />
     <Compile Remove="VIewModelLocator.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <Page Remove="ColumnListBoxTestWindow.xaml" />
-    <Page Remove="Controls\PathPickerControl.xaml" />
   </ItemGroup>
 
   <ItemGroup>

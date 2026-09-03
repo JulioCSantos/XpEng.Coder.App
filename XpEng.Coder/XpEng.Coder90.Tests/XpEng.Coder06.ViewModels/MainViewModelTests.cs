@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using XpEng.Coder06.ViewModels;
 
@@ -8,10 +9,8 @@ namespace XpEng.Coder90.Tests.XpEng.Coder06.ViewModels;
 public class MainViewModelTests : ViewModelTestBase {
     // CLASS-LEVEL OVERRIDE: Applies to all tests in this class
     protected override void ConfigureServices(IServiceCollection services) {
-        base.ConfigureServices(services); // Preserve folder-level rules
-
-        // Example: Class-specific mock
-        // services.AddTransient<ILogger, ConsoleLogger>();
+        base.ConfigureServices(services);
+        services.Replace(ServiceDescriptor.Transient<MainViewModel>(_ => new MainViewModel()));
     }
 
     [TestMethod]

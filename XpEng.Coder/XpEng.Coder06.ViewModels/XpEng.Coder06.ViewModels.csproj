@@ -12,7 +12,9 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
-  </ItemGroup>
+    <InternalsVisibleTo Include="XpEng.Coder90.Tests" />
+	</ItemGroup>
+
 
   <ItemGroup>
     <ProjectReference Include="..\XpEng.Coder09.Models\XpEng.Coder09.Models.csproj" />

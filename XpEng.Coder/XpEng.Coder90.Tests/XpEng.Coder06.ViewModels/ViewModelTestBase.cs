@@ -1,36 +1,44 @@
-﻿using System;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-
-namespace XpEng.Coder90.Tests.XpEng.Coder06.ViewModels;
+﻿using Microsoft.Extensions.DependencyInjection;
+using XpEng.Coder06.ViewModels;
+using XpEng.Coder80.Infrastructure;
 
 public abstract class ViewModelTestBase {
-    protected ServiceProvider Provider = null!;
+
+    protected ServiceProvider Provider { get; private set; } = null!;
+    private IDisposable? _scope;
 
     [TestInitialize]
-    public virtual void Setup() {
-        // Build the provider using any overrides defined by the derived class
-        Provider = TestDIConfig.BuildProvider(ConfigureServices);
-    }
+    public void Initialize() => BuildProvider(null);
 
     [TestCleanup]
-    public virtual void Teardown() {
-        Provider?.Dispose();
-    }
+    public void Teardown() => ReleaseProvider();
 
-    // FOLDER LEVEL: Override this method to add folder-wide mocks
-    // CLASS LEVEL: Derived classes override this to add class-specific mocks
+    /// Folder-level registrations. Overrides call base first, then layer their own on top.
     protected virtual void ConfigureServices(IServiceCollection services) {
-        // Example: Mock out the NavigationService for all ViewModel tests
-        // services.AddSingleton<INavigationService, MockNavigationService>();
+        services.AddViewModels();
     }
 
-    // UNIT TEST LEVEL: Helper to rebuild the container mid-test
-    protected void RebuildProviderWithOverrides(Action<IServiceCollection> testSpecificOverrides) {
+    /// Rebuilds with additional per-test overrides, applied after ConfigureServices.
+    protected void RebuildProviderWithOverrides(Action<IServiceCollection> overrides) {
+        ReleaseProvider();
+        BuildProvider(overrides);
+    }
+
+    private void BuildProvider(Action<IServiceCollection>? overrides) {
+        var services = new ServiceCollection();
+        ConfigureServices(services);
+        overrides?.Invoke(services);
+
+        Provider = services.BuildServiceProvider();
+        _scope = ApplicationServices.UseProvider(Provider);
+    }
+
+    private void ReleaseProvider() {
+        // Provider first: disposing it disposes the services it created, and their Dispose
+        // methods may resolve through the locator. Releasing the scope first would leave
+        // them with no provider to reach.
         Provider?.Dispose();
-        Provider = TestDIConfig.BuildProvider(services => {
-            ConfigureServices(services);      // Keep the Folder/Class rules
-            testSpecificOverrides(services);  // Add the Unit Test specific rules
-        });
+        _scope?.Dispose();
+        _scope = null;
     }
 }
