@@ -21,11 +21,11 @@ public sealed class T4HostServer : IDisposable {
         get {
             lock (InstanceLock) {
                 if (_instance is { Status: T4HostStatus.Disposed }) _instance = null;
-                return _instance ??= new T4HostServer(ApplicationServices.Provider.GetRequiredService<TemplateCompilerService>());
+                return _instance ??= new T4HostServer(ServiceLocator.CurrentProvider.GetRequiredService<TemplateCompilerService>());
             }
         }
     }
-    private IEngineLogger Logger => ApplicationServices.Provider.GetRequiredService<IEngineLogger>();
+    private IEngineLogger Logger => ServiceLocator.CurrentProvider.GetRequiredService<IEngineLogger>();
     private readonly TemplateCompilerService _compiler;
     private readonly CancellationTokenSource _lifetimeCts = new();
     private readonly SemaphoreSlim _startGate = new(1, 1);

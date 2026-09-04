@@ -27,7 +27,7 @@ public class MainModel {
         get {
             if (_configPersistence != null) return _configPersistence;
 
-            _configPersistence = ApplicationServices.Provider.GetRequiredService<IConfigPersistence>()
+            _configPersistence = ServiceLocator.CurrentProvider.GetRequiredService<IConfigPersistence>()
                                  ?? throw new InvalidOperationException("IConfigPersistence is not registered in the DI container.");
 
             return _configPersistence;

@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using XpEng.Coder06.ViewModels;
 using XpEng.Coder80.Infrastructure;
+
+namespace XpEng.Coder90.Tests.XpEng.Coder06.ViewModels;
 
 public abstract class ViewModelTestBase {
 
@@ -15,7 +16,10 @@ public abstract class ViewModelTestBase {
 
     /// Folder-level registrations. Overrides call base first, then layer their own on top.
     protected virtual void ConfigureServices(IServiceCollection services) {
-        services.AddViewModels();
+        // Fully qualified because every project now declares AddRegistrations; an
+        // unqualified call would be ambiguous wherever two of those namespaces are imported.
+        // ViewModels cascades into Models and Services, so this wires the whole branch.
+        global::XpEng.Coder06.ViewModels.ServiceCollectionExtensions.AddRegistrations(services);
     }
 
     /// Rebuilds with additional per-test overrides, applied after ConfigureServices.
@@ -30,7 +34,7 @@ public abstract class ViewModelTestBase {
         overrides?.Invoke(services);
 
         Provider = services.BuildServiceProvider();
-        _scope = ApplicationServices.UseProvider(Provider);
+        _scope = ServiceLocator.UseProvider(Provider);
     }
 
     private void ReleaseProvider() {

@@ -1,0 +1,277 @@
+<#@ template language="C#" hostspecific="true" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Xml" #>
+<#@ assembly name="System.Xml.Linq" #>
+<#@ assembly name="System.Memory" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Text.RegularExpressions" #>
+<#@ import namespace="System.Xml.Linq" #>
+<#@ include file="../Shared/TemplateArguments.ttinclude" #>
+<#@ include file="../Shared/TemplateLog.ttinclude" #>
+<#@ include file="../Shared/SolutionGraph.ttinclude" #>
+<#@ include file="../Shared/TargetFolders.ttinclude" #>
+<#
+    // ============================================================
+    // TARGET FOLDERS — where this template writes, relative to each project's root.
+    // Created if absent. Edit these to match a different solution's conventions; the
+    // generation code below never contains a literal path.
+    // ============================================================
+    var TargetFolders = new[] {
+        new TargetFolder("DesignTime", "Services")   // alongside other infrastructure services
+    };
+
+    // ============================================================
+    // ARGUMENTS (read from {SolutionRoot}\CoderFiles\DesignTimeSetup.args.txt)
+    //
+    //   SolutionFilePath  (required) — full path to the .slnx/.sln to set up.
+    //
+    // Generates:
+    //
+    //   {DeepestProject}/Services/DesignTimeDetector.g.cs      — holds the flag
+    //   {DeepestProject}/Services/DesignTimeSingleton.g.cs     — DI-or-fallback resolution
+    //   {EntryPointProject}/DesignTimeModuleInitializer.g.cs   — sets the flag at load
+    //
+    // The split exists because detecting design mode needs DesignerProperties, which lives in
+    // PresentationFramework and is therefore only available to a WPF project. Infrastructure
+    // stays framework-agnostic and holds a plain bool; the WPF project sets it via a module
+    // initializer, which runs when the assembly loads — including inside the XAML designer's
+    // own process, where App.xaml.cs never runs at all.
+    //
+    // PREREQUISITE: DISetup must have run first. DesignTimeSingleton resolves through
+    // ApplicationServices, which DISetup generates.
+    // ============================================================
+
+    if (!HasArguments) {
+        LogError($"No arguments file found. Looked at: {ArgumentsFilePathForDiagnostics}", null);
+        return string.Empty;
+    }
+
+    string solutionFilePath = GetArgument("SolutionFilePath");
+    if (string.IsNullOrWhiteSpace(solutionFilePath)) {
+        LogError($"SolutionFilePath is missing from {ArgumentsFilePathForDiagnostics}", null);
+        return string.Empty;
+    }
+
+    if (!File.Exists(solutionFilePath)) {
+        LogError($"Solution file does not exist: {solutionFilePath}", null);
+        return string.Empty;
+    }
+
+    Log($"Arguments file  : {ArgumentsFilePathForDiagnostics}");
+    Log($"SolutionFilePath: {solutionFilePath}");
+
+    BuildSolutionGraph(solutionFilePath);
+    foreach (string diagnostic in GraphDiagnostics) Log("GRAPH: " + diagnostic);
+
+    var productionProjects = ProductionProjectsByTier();
+    if (productionProjects.Count == 0) {
+        LogError("No production projects found in the solution.", solutionFilePath);
+        return string.Empty;
+    }
+
+    // The deepest project — every other project already references it, transitively, which is
+    // what makes it the right home for anything the whole solution needs to reach.
+    var infrastructureProject = productionProjects.Last();
+    Log($"Infrastructure  : {infrastructureProject.ProjectName} (tier {infrastructureProject.Tier})");
+
+    // PREREQUISITE CHECK — generating against a missing ApplicationServices would produce a
+    // compile error pointing at the generated file rather than at the actual cause.
+    string applicationServicesPath = FindApplicationServices(infrastructureProject);
+    if (string.IsNullOrWhiteSpace(applicationServicesPath)) {
+        LogError(
+            "ApplicationServices was not found in " + infrastructureProject.ProjectName + ". " +
+            "Run the DISetup template first — DesignTimeSingleton resolves through it.",
+            solutionFilePath);
+        return string.Empty;
+    }
+    Log($"ApplicationServices found: {MakeRelativePath(SolutionDirectory, applicationServicesPath)}");
+
+    // The module initializer needs PresentationFramework, so it goes to the entry point that
+    // actually enables WPF. Detected structurally via <UseWPF>, not by a name convention —
+    // a UI project may be called Views, GUI, UI, or anything else.
+    var entryPoints = productionProjects.Where(p => p.Tier == 1).ToList();
+    var wpfEntryPoints = entryPoints.Where(IsWpfProject).ToList();
+
+    if (wpfEntryPoints.Count == 0) {
+        LogError(
+            "No entry-point project with <UseWPF>true</UseWPF> was found. Candidates at tier 1: " +
+            (entryPoints.Count == 0 ? "(none)" : string.Join(", ", entryPoints.Select(p => p.ProjectName))) + ". " +
+            "The module initializer needs PresentationFramework, so it cannot be generated without one.",
+            solutionFilePath);
+        return string.Empty;
+    }
+
+    if (wpfEntryPoints.Count > 1) {
+        LogError(
+            "Several entry-point projects enable WPF: " + string.Join(", ", wpfEntryPoints.Select(p => p.ProjectName)) + ". " +
+            "Only one should own design-time detection; narrow the solution or generate manually.",
+            solutionFilePath);
+        return string.Empty;
+    }
+
+    var wpfProject = wpfEntryPoints[0];
+    Log($"WPF entry point : {wpfProject.ProjectName} (tier {wpfProject.Tier})");
+    Log("");
+
+    int filesWritten = 0;
+
+    string designTimeFolder = ResolveTargetFolder(TargetFolders, "DesignTime", infrastructureProject);
+    Log($"[{infrastructureProject.ProjectName}] -> {MakeRelativePath(infrastructureProject.ProjectDirectory, designTimeFolder)}");
+
+    WriteDesignTimeFile(designTimeFolder, "DesignTimeDetector.g.cs", BuildDesignTimeDetector(infrastructureProject), ref filesWritten);
+    WriteDesignTimeFile(designTimeFolder, "DesignTimeSingleton.g.cs", BuildDesignTimeSingleton(infrastructureProject), ref filesWritten);
+
+    Log($"[{wpfProject.ProjectName}] -> project root");
+    WriteDesignTimeFile(wpfProject.ProjectDirectory, "DesignTimeModuleInitializer.g.cs", BuildModuleInitializer(wpfProject, infrastructureProject), ref filesWritten);
+
+    Log("");
+    Log($"Done. {filesWritten} file(s) written.");
+    Log("");
+    Log("Next: give each singleton an Instance property resolving through DesignTimeSingleton, e.g.");
+    Log("    public static MainModel Instance => DesignTimeSingleton<MainModel>.Resolve(() => new MainModel());");
+
+    FlushLog(solutionFilePath);
+
+    Write($"Design-time setup complete: {filesWritten} file(s).");
+#>
+<#+
+    // Required by TemplateArguments.ttinclude and TemplateLog.ttinclude: under the t4 CLI,
+    // Host.TemplateFile is empty, so the template cannot discover its own name.
+    private string TemplateNameFallback { get { return "DesignTimeSetup"; } }
+
+    /// <UseWPF>true</UseWPF> is the condition that actually makes PresentationFramework —
+    /// and therefore DesignerProperties — available. Structural, unlike a name convention.
+    private bool IsWpfProject(SolutionProject project) {
+        try {
+            var doc = XDocument.Load(project.ProjectFilePath);
+            var useWpf = doc.Descendants("UseWPF").FirstOrDefault();
+            bool enabled;
+            return useWpf != null && bool.TryParse(useWpf.Value, out enabled) && enabled;
+        }
+        catch { return false; }
+    }
+
+    /// Looks for ApplicationServices anywhere in the project — DISetup writes it to a folder
+    /// the operator can configure, so its exact location is not fixed.
+    private string FindApplicationServices(SolutionProject project) {
+        if (!Directory.Exists(project.ProjectDirectory)) return string.Empty;
+
+        foreach (string file in Directory.GetFiles(project.ProjectDirectory, "ApplicationServices*.cs", SearchOption.AllDirectories)) {
+            string folderName = Path.GetFileName(Path.GetDirectoryName(file));
+            if (folderName.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+                folderName.Equals("obj", StringComparison.OrdinalIgnoreCase)) continue;
+            return file;
+        }
+
+        return string.Empty;
+    }
+
+    private void WriteDesignTimeFile(string folder, string fileName, string content, ref int counter) {
+        string path = Path.Combine(folder, fileName);
+        File.WriteAllText(path, content);
+        Log("    wrote " + fileName);
+        counter++;
+    }
+
+    private string DesignTimeBanner(string sourceDescription) {
+        var sb = new StringBuilder();
+        sb.AppendLine("// <auto-generated>");
+        sb.AppendLine("//     Generated by the DesignTimeSetup template. Do not edit — regenerated on every run.");
+        sb.AppendLine("//     " + sourceDescription);
+        sb.AppendLine("// </auto-generated>");
+        sb.AppendLine();
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine();
+        return sb.ToString();
+    }
+
+    private string BuildDesignTimeDetector(SolutionProject project) {
+        var sb = new StringBuilder();
+        sb.Append(DesignTimeBanner("Holds whether the process is the XAML designer's."));
+        sb.AppendLine("namespace " + project.RootNamespace + ".Services;");
+        sb.AppendLine();
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine("/// Pure signal storage, deliberately with no WPF dependency — this project stays");
+        sb.AppendLine("/// framework-agnostic. The detection itself runs once in the WPF project, whose");
+        sb.AppendLine("/// module initializer sets this flag as its assembly loads.");
+        sb.AppendLine("///");
+        sb.AppendLine("/// A module initializer rather than App.xaml.cs because the designer hosts the");
+        sb.AppendLine("/// assembly in its own process, where application startup never runs.");
+        sb.AppendLine("/// </summary>");
+        sb.AppendLine("public static class DesignTimeDetector {");
+        sb.AppendLine();
+        sb.AppendLine("    public static bool IsInDesignMode { get; set; }");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    private string BuildDesignTimeSingleton(SolutionProject project) {
+        var sb = new StringBuilder();
+        sb.Append(DesignTimeBanner("Resolves a singleton from the container, with a design-time fallback."));
+        sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
+        sb.AppendLine();
+        sb.AppendLine("namespace " + project.RootNamespace + ".Services;");
+        sb.AppendLine();
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine("/// Resolves T from the container, falling back to a directly constructed instance when");
+        sb.AppendLine("/// the container is unavailable AND the process is the designer's.");
+        sb.AppendLine("///");
+        sb.AppendLine("/// The design-mode condition matters: a resolution failure in production or in a test");
+        sb.AppendLine("/// is a real bug and propagates. Only the designer — where the container genuinely was");
+        sb.AppendLine("/// never built — gets the fallback, so a view can still render.");
+        sb.AppendLine("///");
+        sb.AppendLine("/// A generic static class holds separate fields per closed type, so each singleton gets");
+        sb.AppendLine("/// its own fallback with no per-type code.");
+        sb.AppendLine("/// </summary>");
+        sb.AppendLine("public static class DesignTimeSingleton<T> where T : class {");
+        sb.AppendLine();
+        sb.AppendLine("    private static readonly Lock _lock = new();");
+        sb.AppendLine("    private static T? _designTimeFallback;");
+        sb.AppendLine();
+        sb.AppendLine("    public static T Resolve(Func<T> constructFallback) {");
+        sb.AppendLine("        try {");
+        sb.AppendLine("            return " + project.RootNamespace + ".ApplicationServices.Provider.GetRequiredService<T>();");
+        sb.AppendLine("        }");
+        sb.AppendLine("        catch {");
+        sb.AppendLine("            if (!DesignTimeDetector.IsInDesignMode) throw;");
+        sb.AppendLine();
+        sb.AppendLine("            lock (_lock) {");
+        sb.AppendLine("                return _designTimeFallback ??= constructFallback();");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    private string BuildModuleInitializer(SolutionProject wpfProject, SolutionProject infrastructureProject) {
+        var sb = new StringBuilder();
+        sb.Append(DesignTimeBanner("Sets the design-mode flag as this assembly loads."));
+        sb.AppendLine("using System.ComponentModel;");
+        sb.AppendLine("using System.Runtime.CompilerServices;");
+        sb.AppendLine("using System.Windows;");
+        sb.AppendLine("using " + infrastructureProject.RootNamespace + ".Services;");
+        sb.AppendLine();
+        sb.AppendLine("namespace " + wpfProject.RootNamespace + ";");
+        sb.AppendLine();
+        sb.AppendLine("internal static class DesignTimeModuleInitializer {");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Runs automatically as this assembly loads into any process — including the XAML");
+        sb.AppendLine("    /// designer's, which loads it to render but never runs application startup. That is");
+        sb.AppendLine("    /// why this is a module initializer rather than a call from App.xaml.cs.");
+        sb.AppendLine("    ///");
+        sb.AppendLine("    /// DesignerProperties is the reliable check; it needs PresentationFramework, which is");
+        sb.AppendLine("    /// why this lives here rather than alongside the flag it sets.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    [ModuleInitializer]");
+        sb.AppendLine("    internal static void Initialize() {");
+        sb.AppendLine("        DesignTimeDetector.IsInDesignMode = DesignerProperties.GetIsInDesignMode(new DependencyObject());");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+#>

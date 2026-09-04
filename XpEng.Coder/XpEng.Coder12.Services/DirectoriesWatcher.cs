@@ -30,7 +30,7 @@ namespace XpEng.Coder12.Services {
         private readonly Channel<List<DirectoryChangedEventArgs>> _eventChannel = Channel.CreateUnbounded<List<DirectoryChangedEventArgs>>();
 
         // Dynamically resolve logger exactly like the ViewModel does
-        private IEngineLogger Logger => ApplicationServices.Provider.GetRequiredService<IEngineLogger>();
+        private IEngineLogger Logger => ServiceLocator.CurrentProvider.GetRequiredService<IEngineLogger>();
 
         public bool IsRunning { get; private set; }
 

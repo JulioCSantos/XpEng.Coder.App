@@ -1,0 +1,41 @@
+# DISetup — run at 2026-09-03 21:02:04
+
+[21:02:04] Arguments file  : C:\Users\julio\source\repos\JullioSanntos\CodeGeneratorServices\XpEng.Coder.App\CoderTemplates\DISetup.args.txt
+[21:02:04] SolutionFilePath: C:\Users\julio\source\repos\JullioSanntos\CodeGeneratorServices\XpEng.Coder.App\XpEng.Coder.App.slnx
+[21:02:04] Production projects: 7, test projects skipped: 0
+[21:02:04] Shared DI components -> XpEng.Coder80.Infrastructure (tier 4, namespace XpEng.Coder80.Infrastructure)
+[21:02:04] 
+[21:02:04] [XpEng.Coder80.Infrastructure] -> DI
+[21:02:04]     wrote RegisterAttribute.g.cs
+[21:02:04]     wrote IAddRegistrations.g.cs
+[21:02:04]     wrote IOverrideRegistrations.g.cs
+[21:02:04]     wrote ServiceLocator.g.cs
+[21:02:04]     wrote RegistrationScanner.g.cs
+[21:02:04] 
+[21:02:04] [Tier 1] XpEng.Coder03.Views  (namespace XpEng.Coder03.Views)
+[21:02:04]     cascades into: XpEng.Coder06.Data, XpEng.Coder06.ViewModels, XpEng.Coder09.Models, XpEng.Coder80.Infrastructure
+[21:02:04]     wrote ServiceCollectionExtensions.g.cs
+[21:02:04] [Tier 1] XpEng.Coder90.Tests  (namespace XpEng.Coder90.Tests)
+[21:02:04]     cascades into: XpEng.Coder06.Data, XpEng.Coder06.ViewModels, XpEng.Coder09.Models, XpEng.Coder80.Infrastructure
+[21:02:04]     wrote ServiceCollectionExtensions.g.cs
+[21:02:04] [Tier 2] XpEng.Coder06.Data  (namespace XpEng.Coder06.Data)
+[21:02:04]     cascades into: XpEng.Coder09.Models, XpEng.Coder80.Infrastructure
+[21:02:04]     wrote ServiceCollectionExtensions.g.cs
+[21:02:04] [Tier 2] XpEng.Coder06.ViewModels  (namespace XpEng.Coder06.ViewModels)
+[21:02:04]     cascades into: XpEng.Coder09.Models, XpEng.Coder12.Services, XpEng.Coder80.Infrastructure
+[21:02:04]     wrote ServiceCollectionExtensions.g.cs
+[21:02:04] [Tier 3] XpEng.Coder09.Models  (namespace XpEng.Coder09.Models)
+[21:02:04]     cascades into: XpEng.Coder80.Infrastructure
+[21:02:04]     wrote ServiceCollectionExtensions.g.cs
+[21:02:04] [Tier 3] XpEng.Coder12.Services  (namespace XpEng.Coder12.Services)
+[21:02:04]     cascades into: XpEng.Coder80.Infrastructure
+[21:02:04]     wrote ServiceCollectionExtensions.g.cs
+[21:02:04] [Tier 4] XpEng.Coder80.Infrastructure  (namespace XpEng.Coder80.Infrastructure)
+[21:02:04]     wrote ServiceCollectionExtensions.g.cs
+[21:02:04] 
+[21:02:04] Done. 12 file(s) written.
+[21:02:04] 
+[21:02:04] Composition root:
+[21:02:04]     var services = new ServiceCollection();
+[21:02:04]     XpEng.Coder03.Views.ServiceCollectionExtensions.AddRegistrations(services);
+[21:02:04]     XpEng.Coder80.Infrastructure.ServiceLocator.Initialize(services.BuildServiceProvider());

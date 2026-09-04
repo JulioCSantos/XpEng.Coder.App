@@ -2,7 +2,6 @@
 using XpEng.Coder09.Models;
 using XpEng.Coder09.Models.Entities;
 using XpEng.Coder80.Infrastructure;
-using XpEng.Coder80.Infrastructure.Services;
 
 namespace XpEng.Coder90.Tests.XpEng.Coder09.Models;
 
@@ -15,12 +14,12 @@ public class MainModelTests {
     public void Setup() {
         // The collection is a local now — ApplicationServices holds only the built provider.
         var services = new ServiceCollection();
-        services.AddModels();
+        global::XpEng.Coder09.Models.ServiceCollectionExtensions.AddRegistrations(services);
         _provider = services.BuildServiceProvider();
 
         // MainModel.Instance goes through the locator, so scope it to this test's container.
         // AsyncLocal, so it survives an await and does not leak into a parallel test.
-        _scope = ApplicationServices.UseProvider(_provider);
+        _scope = ServiceLocator.UseProvider(_provider);
     }
 
     [TestCleanup]

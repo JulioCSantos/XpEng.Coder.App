@@ -18,7 +18,7 @@ namespace XpEng.Coder06.ViewModels {
     public partial class DashboardViewModel : ViewModelBase, IDisposable {
 
         #region Properties
-        private IEngineLogger Logger => ApplicationServices.Provider.GetRequiredService<IEngineLogger>();
+        private IEngineLogger Logger => ServiceLocator.CurrentProvider.GetRequiredService<IEngineLogger>();
 
         #region Watcher
         private DirectoriesWatcher? _watcher;
@@ -403,7 +403,7 @@ namespace XpEng.Coder06.ViewModels {
                             string.IsNullOrEmpty(changeEvent.OldFileName) ? null : Path.Combine(affectedSource.SourcePath.FullName, changeEvent.OldFileName)
                         )).ToList();
 
-                        var caller = ApplicationServices.Provider.GetRequiredService<ITemplatesCaller>();
+                        var caller = ServiceLocator.CurrentProvider.GetRequiredService<ITemplatesCaller>();
                         await caller.ProcessBatchAsync(affectedPlan.PlanName, activeTargets, fileChanges);
                     }
                     catch (Exception ex) {
@@ -436,7 +436,7 @@ namespace XpEng.Coder06.ViewModels {
         private async Task ForceSync() {
             SaveConfigurationInternal(isAutoSave: true);
 
-            var caller = ApplicationServices.Provider.GetRequiredService<ITemplatesCaller>();
+            var caller = ServiceLocator.CurrentProvider.GetRequiredService<ITemplatesCaller>();
 
             foreach (var plan in MainModel.Instance.PlanOrchestrators.Where(p => p.IsMonitored)) {
 

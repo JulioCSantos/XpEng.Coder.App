@@ -38,21 +38,21 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e) {
 
-        // The collection is a local now rather than a static on ApplicationServices: it exists only
-        // long enough to build the provider, and ApplicationServices holds the result.
+        // The collection is a local rather than a static: it exists only long enough to build
+        // the provider, and ServiceLocator holds the result.
         var services = new ServiceCollection();
-        services.AddViews();
-        ApplicationServices.Initialize(services.BuildServiceProvider());
+        global::XpEng.Coder03.Views.ServiceCollectionExtensions.AddRegistrations(services);
+        ServiceLocator.Initialize(services.BuildServiceProvider());
 
         _ = WarmUpT4HostAsync();
-        var mainView = ApplicationServices.Provider.GetRequiredService<MainView>();
+        var mainView = ServiceLocator.CurrentProvider.GetRequiredService<MainView>();
         mainView.Show();
         base.OnStartup(e);
     }
 
     private static async Task WarmUpT4HostAsync() {
         try { await T4HostServer.Instance.EnsureStartedAsync(CancellationToken.None).ConfigureAwait(false); }
-        catch (Exception ex) { ApplicationServices.Provider.GetRequiredService<IEngineLogger>().Log($"T4 host warm-up failed: {ex.Message}"); }
+        catch (Exception ex) { ServiceLocator.CurrentProvider.GetRequiredService<IEngineLogger>().Log($"T4 host warm-up failed: {ex.Message}"); }
     }
 
     protected override void OnExit(ExitEventArgs e) {

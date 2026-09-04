@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using XpEng.Coder06.Data;
 using XpEng.Coder06.ViewModels;
 
 namespace XpEng.Coder90.Tests.XpEng.Coder09.Models;
@@ -13,8 +12,11 @@ public class ContractResolutionTests {
     public void DIContainer_ResolvesTheFullCascade_WhenOrchestratedFromTheTestProject() {
         var services = new ServiceCollection();
 
-        services.AddData("Server=TestServer;Database=TestDb;Integrated Security=True;");
-        services.AddViewModels();
+        // Fully qualified because every project now declares AddRegistrations. The connection
+        // string is no longer a parameter — AddRegistrations has a fixed signature, and
+        // nothing in Coder.App consumes one yet.
+        global::XpEng.Coder06.Data.ServiceCollectionExtensions.AddRegistrations(services);
+        global::XpEng.Coder06.ViewModels.ServiceCollectionExtensions.AddRegistrations(services);
 
         var provider = services.BuildServiceProvider();
 

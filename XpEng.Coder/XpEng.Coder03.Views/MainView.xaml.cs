@@ -8,12 +8,13 @@ namespace XpEng.Coder03.Views {
     /// <summary>
     /// Interaction logic for MainView.xaml
     /// </summary>
+    [Register]
     public partial class MainView : Window {
 
         #region MainViewModel
         private MainViewModel? _mainViewModel;
         public MainViewModel MainViewModel {
-            get { return _mainViewModel ??= ApplicationServices.Provider.GetRequiredService<MainViewModel>(); }
+            get { return _mainViewModel ??= ServiceLocator.CurrentProvider.GetRequiredService<MainViewModel>(); }
             protected set => _mainViewModel = value;
         }
         #endregion MainViewModel

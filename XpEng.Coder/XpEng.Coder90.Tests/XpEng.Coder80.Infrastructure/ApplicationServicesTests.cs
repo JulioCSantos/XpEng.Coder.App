@@ -10,7 +10,7 @@ namespace XpEng.Coder90.Tests.XpEng.Coder80.Infrastructure;
 /// MainModel.Instance and friends to behave.
 /// </summary>
 [TestClass]
-public class ApplicationServicesTests {
+public class ServiceLocatorTests {
 
     // Two independent containers, each registering the same service type. Resolving through
     // the locator under each should yield instances from different containers.
@@ -23,13 +23,13 @@ public class ApplicationServicesTests {
     }
 
     [TestCleanup]
-    public void Cleanup() => ApplicationServices.Reset();
+    public void Cleanup() => ServiceLocator.Reset();
 
     [TestMethod]
     public void Provider_WithoutInitialize_ThrowsNamingItsOwnCause() {
-        ApplicationServices.Reset();
+        ServiceLocator.Reset();
 
-        var exception = Assert.ThrowsException<InvalidOperationException>(() => _ = ApplicationServices.Provider);
+        var exception = Assert.ThrowsException<InvalidOperationException>(() => _ = ServiceLocator.CurrentProvider);
 
         StringAssert.Contains(exception.Message, "has not been built",
             "The message should say what is wrong rather than surfacing as a null reference elsewhere.");
@@ -38,14 +38,14 @@ public class ApplicationServicesTests {
     [TestMethod]
     public void UseProvider_RedirectsResolution_AwayFromTheDefault() {
         var defaultProvider = BuildContainerWith<IProbe, ProductionProbe>();
-        ApplicationServices.Initialize(defaultProvider);
+        ServiceLocator.Initialize(defaultProvider);
 
-        var fromDefault = ApplicationServices.Provider.GetRequiredService<IProbe>();
+        var fromDefault = ServiceLocator.CurrentProvider.GetRequiredService<IProbe>();
         Assert.IsInstanceOfType(fromDefault, typeof(ProductionProbe));
 
         var testProvider = BuildContainerWith<IProbe, TestProbe>();
-        using (ApplicationServices.UseProvider(testProvider)) {
-            var fromScope = ApplicationServices.Provider.GetRequiredService<IProbe>();
+        using (ServiceLocator.UseProvider(testProvider)) {
+            var fromScope = ServiceLocator.CurrentProvider.GetRequiredService<IProbe>();
 
             Assert.IsInstanceOfType(fromScope, typeof(TestProbe),
                 "Inside the scope the locator should resolve from the scoped provider.");
@@ -53,7 +53,7 @@ public class ApplicationServicesTests {
                 "The two containers are independent, so their instances must differ.");
         }
 
-        var afterScope = ApplicationServices.Provider.GetRequiredService<IProbe>();
+        var afterScope = ServiceLocator.CurrentProvider.GetRequiredService<IProbe>();
         Assert.IsInstanceOfType(afterScope, typeof(ProductionProbe),
             "Disposing the scope should restore the default provider.");
         Assert.AreSame(fromDefault, afterScope,
@@ -62,19 +62,19 @@ public class ApplicationServicesTests {
 
     [TestMethod]
     public void UseProvider_Nested_RestoresTheOuterScope() {
-        ApplicationServices.Initialize(BuildContainerWith<IProbe, ProductionProbe>());
+        ServiceLocator.Initialize(BuildContainerWith<IProbe, ProductionProbe>());
 
         var outer = BuildContainerWith<IProbe, TestProbe>();
         var inner = BuildContainerWith<IProbe, OtherTestProbe>();
 
-        using (ApplicationServices.UseProvider(outer)) {
-            Assert.IsInstanceOfType(ApplicationServices.Provider.GetRequiredService<IProbe>(), typeof(TestProbe));
+        using (ServiceLocator.UseProvider(outer)) {
+            Assert.IsInstanceOfType(ServiceLocator.CurrentProvider.GetRequiredService<IProbe>(), typeof(TestProbe));
 
-            using (ApplicationServices.UseProvider(inner)) {
-                Assert.IsInstanceOfType(ApplicationServices.Provider.GetRequiredService<IProbe>(), typeof(OtherTestProbe));
+            using (ServiceLocator.UseProvider(inner)) {
+                Assert.IsInstanceOfType(ServiceLocator.CurrentProvider.GetRequiredService<IProbe>(), typeof(OtherTestProbe));
             }
 
-            Assert.IsInstanceOfType(ApplicationServices.Provider.GetRequiredService<IProbe>(), typeof(TestProbe),
+            Assert.IsInstanceOfType(ServiceLocator.CurrentProvider.GetRequiredService<IProbe>(), typeof(TestProbe),
                 "Disposing the inner scope should restore the outer one, not the default.");
         }
     }
@@ -84,13 +84,13 @@ public class ApplicationServicesTests {
     /// and this test would silently see the default provider instead.
     [TestMethod]
     public async Task UseProvider_SurvivesAnAwait() {
-        ApplicationServices.Initialize(BuildContainerWith<IProbe, ProductionProbe>());
+        ServiceLocator.Initialize(BuildContainerWith<IProbe, ProductionProbe>());
         var testProvider = BuildContainerWith<IProbe, TestProbe>();
 
-        using (ApplicationServices.UseProvider(testProvider)) {
+        using (ServiceLocator.UseProvider(testProvider)) {
             await Task.Delay(10).ConfigureAwait(false);
 
-            var afterAwait = ApplicationServices.Provider.GetRequiredService<IProbe>();
+            var afterAwait = ServiceLocator.CurrentProvider.GetRequiredService<IProbe>();
             Assert.IsInstanceOfType(afterAwait, typeof(TestProbe),
                 "The scoped provider should still be in effect after an await.");
         }
@@ -101,11 +101,11 @@ public class ApplicationServicesTests {
     [TestMethod]
     public void AttributeRegisteredSingleton_ResolvesToTheSameInstanceThroughTheLocator() {
         var services = new ServiceCollection();
-        services.ApplyRegistrations(typeof(ApplicationServicesTests).Assembly);
-        ApplicationServices.Initialize(services.BuildServiceProvider());
+        RegistrationScanner.ApplyRegistrations(services, typeof(ServiceLocatorTests).Assembly);
+        ServiceLocator.Initialize(services.BuildServiceProvider());
 
-        var first = ApplicationServices.Provider.GetRequiredService<AttributeSingletonProbe>();
-        var second = ApplicationServices.Provider.GetRequiredService<AttributeSingletonProbe>();
+        var first = ServiceLocator.CurrentProvider.GetRequiredService<AttributeSingletonProbe>();
+        var second = ServiceLocator.CurrentProvider.GetRequiredService<AttributeSingletonProbe>();
 
         Assert.AreSame(first, second, "A [Register] Singleton should resolve to one instance.");
     }
@@ -113,11 +113,11 @@ public class ApplicationServicesTests {
     [TestMethod]
     public void AttributeRegisteredTransient_ResolvesToDistinctInstancesThroughTheLocator() {
         var services = new ServiceCollection();
-        services.ApplyRegistrations(typeof(ApplicationServicesTests).Assembly);
-        ApplicationServices.Initialize(services.BuildServiceProvider());
+        RegistrationScanner.ApplyRegistrations(services, typeof(ServiceLocatorTests).Assembly);
+        ServiceLocator.Initialize(services.BuildServiceProvider());
 
-        var first = ApplicationServices.Provider.GetRequiredService<AttributeTransientProbe>();
-        var second = ApplicationServices.Provider.GetRequiredService<AttributeTransientProbe>();
+        var first = ServiceLocator.CurrentProvider.GetRequiredService<AttributeTransientProbe>();
+        var second = ServiceLocator.CurrentProvider.GetRequiredService<AttributeTransientProbe>();
 
         Assert.AreNotSame(first, second, "A [Register] Transient should resolve to a new instance each time.");
     }
@@ -127,11 +127,11 @@ public class ApplicationServicesTests {
     [TestMethod]
     public void SeparateContainers_FromTheSameScan_DoNotShareInstances() {
         var firstServices = new ServiceCollection();
-        firstServices.ApplyRegistrations(typeof(ApplicationServicesTests).Assembly);
+        RegistrationScanner.ApplyRegistrations(firstServices, typeof(ServiceLocatorTests).Assembly);
         var firstProvider = firstServices.BuildServiceProvider();
 
         var secondServices = new ServiceCollection();
-        secondServices.ApplyRegistrations(typeof(ApplicationServicesTests).Assembly);
+        RegistrationScanner.ApplyRegistrations(secondServices, typeof(ServiceLocatorTests).Assembly);
         var secondProvider = secondServices.BuildServiceProvider();
 
         var fromFirst = firstProvider.GetRequiredService<AttributeSingletonProbe>();
