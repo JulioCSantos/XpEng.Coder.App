@@ -15,6 +15,10 @@
     <File Path="BasicTemplates/WPF/DISetup.tt" />
     <File Path="BasicTemplates/WPF/PlanSetup.tt" />
   </Folder>
+  <Folder Name="/CoderFiles/">
+    <File Path="CoderFiles/DISetup.log.txt" />
+    <File Path="CoderFiles/README-DependencyInjection.md" />
+  </Folder>
   <Project Path="XpEng.Coder/XpEng.Coder03.Views/XpEng.Coder03.Views.csproj" />
   <Project Path="XpEng.Coder/XpEng.Coder06.Data/XpEng.Coder06.Data.csproj" />
   <Project Path="XpEng.Coder/XpEng.Coder06.ViewModels/XpEng.Coder06.ViewModels.csproj" />

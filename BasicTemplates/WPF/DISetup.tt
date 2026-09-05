@@ -105,6 +105,7 @@
     Log("");
 
     int filesWritten = 0;
+    int stubsSkipped = 0;
 
     // ---- shared components, once ----
     string infrastructureDiFolder = ResolveTargetFolder(TargetFolders, "DI", infrastructureProject);
@@ -128,10 +129,24 @@
         string projectDiFolder = ResolveTargetFolder(TargetFolders, "DI", project);
         WriteDiFile(projectDiFolder, "ServiceCollectionExtensions.g.cs",
             BuildServiceCollectionExtensions(project, directDependencies, infrastructureProject), ref filesWritten);
+
+        // A hand-written stub, created ONCE and never regenerated — it is where a developer
+        // puts registrations the attribute scan cannot express, so overwriting it would
+        // destroy real work. No .g.cs suffix, for the same reason.
+        WriteManualStubIfMissing(project, infrastructureProject, ref filesWritten, ref stubsSkipped);
     }
 
+    // Documentation of the mechanism, copied beside the arguments file. Overwritten every
+    // run: unlike the Manual.cs stubs nobody edits this, and a stale copy describing a
+    // mechanism that has since changed is worse than none.
+    string readmePath = Path.Combine(Path.GetDirectoryName(solutionFilePath), "CoderFiles", "README-DependencyInjection.md");
+    Directory.CreateDirectory(Path.GetDirectoryName(readmePath));
+    File.WriteAllText(readmePath, BuildReadme(infrastructureProject, projects));
     Log("");
-    Log($"Done. {filesWritten} file(s) written.");
+    Log("Wrote " + MakeRelativePath(SolutionDirectory, readmePath));
+
+    Log("");
+    Log($"Done. {filesWritten} file(s) written" + (stubsSkipped > 0 ? $", {stubsSkipped} existing stub(s) left untouched." : "."));
     Log("");
     Log("Composition root:");
     Log("    var services = new ServiceCollection();");
@@ -435,6 +450,78 @@
         return sb.ToString();
     }
 
+
+    /// The hand-written companion to the generated ServiceCollectionExtensions. Created once
+    /// with a commented example; never touched again, since it is where real registrations
+    /// live. Deliberately has no .g.cs suffix — that suffix means "regenerated every run".
+    private void WriteManualStubIfMissing(SolutionProject project, SolutionProject infrastructureProject, ref int written, ref int skipped) {
+        string path = Path.Combine(project.ProjectDirectory, "ServiceCollectionExtensions.Manual.cs");
+
+        if (File.Exists(path)) {
+            Log("    ServiceCollectionExtensions.Manual.cs already exists — left untouched");
+            skipped++;
+            return;
+        }
+
+        File.WriteAllText(path, BuildManualStub(project, infrastructureProject));
+        Log("    wrote ServiceCollectionExtensions.Manual.cs (stub)");
+        written++;
+    }
+
+    private string BuildManualStub(SolutionProject project, SolutionProject infrastructureProject) {
+        bool isInfrastructure = project.ProjectName.Equals(infrastructureProject.ProjectName, StringComparison.OrdinalIgnoreCase);
+        string infrastructureUsing = isInfrastructure ? "" : "using " + infrastructureProject.RootNamespace + ";\n";
+
+        var sb = new StringBuilder();
+        sb.AppendLine("// Hand-written. Created once by the DISetup template and never regenerated —");
+        sb.AppendLine("// edit freely.");
+        sb.AppendLine();
+        sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
+        if (!isInfrastructure) sb.AppendLine("using " + infrastructureProject.RootNamespace + ";");
+        sb.AppendLine();
+        sb.AppendLine("namespace " + project.RootNamespace + ";");
+        sb.AppendLine();
+        sb.AppendLine("public static partial class ServiceCollectionExtensions {");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Registrations the attribute scan cannot express. Called by the generated");
+        sb.AppendLine("    /// AddRegistrations after this project's dependencies and its own scan have run.");
+        sb.AppendLine("    ///");
+        sb.AppendLine("    /// THREE WAYS TO REGISTER, and which to reach for:");
+        sb.AppendLine("    ///");
+        sb.AppendLine("    ///   [Register] on the class — the default. Works when you own the type and it has");
+        sb.AppendLine("    ///   a PUBLIC constructor, because the scan activates it by reflection:");
+        sb.AppendLine("    ///");
+        sb.AppendLine("    ///       [Register]                                    // as itself, Singleton");
+        sb.AppendLine("    ///       [Register(typeof(IThing))]                    // against an interface");
+        sb.AppendLine("    ///       [Register(typeof(IThing), ServiceLifetime.Transient)]");
+        sb.AppendLine("    ///");
+        sb.AppendLine("    ///   HERE — you own the type, but reflection cannot build it: a non-public");
+        sb.AppendLine("    ///   constructor, an options lambda, a lifetime decided at runtime. A factory");
+        sb.AppendLine("    ///   written here is compiled code in this assembly, so it can reach an internal");
+        sb.AppendLine("    ///   or protected constructor that reflection cannot:");
+        sb.AppendLine("    ///");
+        sb.AppendLine("    ///       services.AddSingleton<MainViewModel>(_ => new MainViewModel());");
+        sb.AppendLine("    ///       services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connectionString));");
+        sb.AppendLine("    ///");
+        sb.AppendLine("    ///   IAddRegistrations — you do NOT own the type and cannot decorate it: a");
+        sb.AppendLine("    ///   scaffolded entity, generated code, something from a package. Implement the");
+        sb.AppendLine("    ///   interface in its own class under DI/; the scan finds every implementation, so");
+        sb.AppendLine("    ///   any number can coexist. This is the one most easily missed.");
+        sb.AppendLine("    ///");
+        sb.AppendLine("    /// To REPLACE a registration rather than add one — resolving a conflict, or");
+        sb.AppendLine("    /// substituting in a test — see IOverrideRegistrations. See also");
+        sb.AppendLine("    /// CoderFiles/README-DependencyInjection.md.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    static partial void AddManualRegistrations(IServiceCollection services) {");
+        sb.AppendLine();
+        sb.AppendLine("        // Example — delete or replace:");
+        sb.AppendLine("        // services.AddSingleton<SomeType>(_ => new SomeType());");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
     private string BuildServiceCollectionExtensions(SolutionProject project, List<SolutionProject> directDependencies, SolutionProject infrastructureProject) {
         bool isInfrastructure = project.ProjectName.Equals(infrastructureProject.ProjectName, StringComparison.OrdinalIgnoreCase);
 
@@ -483,4 +570,365 @@
         sb.AppendLine("}");
         return sb.ToString();
     }
+
+    /// The DI documentation, written beside the arguments file. Overwritten every run:
+    /// unlike the Manual.cs stubs nobody edits this, and a stale copy describing a
+    /// mechanism that has since changed is worse than none.
+    private string BuildReadme(SolutionProject infrastructureProject, List<SolutionProject> projects) {
+        string infraName = infrastructureProject.ProjectName;
+        string infraNamespace = infrastructureProject.RootNamespace;
+        string entryNamespace = projects.First(p => p.Tier == 1).RootNamespace;
+
+        var sb = new StringBuilder();
+        sb.AppendLine("# Dependency Injection");
+        sb.AppendLine("");
+        sb.AppendLine("Generated by the DISetup template. This file is overwritten on every run — it documents");
+        sb.AppendLine("the mechanism as it currently stands, so edits here are lost. Your own registrations live");
+        sb.AppendLine("in each project's `ServiceCollectionExtensions.Manual.cs`, which is never regenerated.");
+        sb.AppendLine("");
+        sb.AppendLine("---");
+        sb.AppendLine("");
+        sb.AppendLine("## How the wiring fits together");
+        sb.AppendLine("");
+        sb.AppendLine("Every project has a generated `DI/ServiceCollectionExtensions.g.cs` declaring one method:");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("public static IServiceCollection AddRegistrations(this IServiceCollection services)");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("It does three things, in order: calls `AddRegistrations` on each project it directly");
+        sb.AppendLine("depends on, runs the registration scan over its own assembly, then calls");
+        sb.AppendLine("`AddManualRegistrations` — the hand-written seam.");
+        sb.AppendLine("");
+        sb.AppendLine("Because each project cascades into its direct dependencies, the composition root only");
+        sb.AppendLine("calls the entry point. In a WPF application that is `App.xaml.cs`:");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("protected override void OnStartup(StartupEventArgs e) {");
+        sb.AppendLine("");
+        sb.AppendLine("    // The collection is a local: it exists only long enough to build the provider,");
+        sb.AppendLine("    // and ServiceLocator holds the result for the life of the process.");
+        sb.AppendLine("    var services = new ServiceCollection();");
+        sb.AppendLine("    " + entryNamespace + ".ServiceCollectionExtensions.AddRegistrations(services);");
+        sb.AppendLine("    " + infraNamespace + ".ServiceLocator.Initialize(services.BuildServiceProvider());");
+        sb.AppendLine("");
+        sb.AppendLine("    // Nothing may resolve before Initialize has run — CurrentProvider throws until then.");
+        sb.AppendLine("    var mainView = " + infraNamespace + ".ServiceLocator.CurrentProvider.GetRequiredService<MainView>();");
+        sb.AppendLine("    mainView.Show();");
+        sb.AppendLine("");
+        sb.AppendLine("    base.OnStartup(e);");
+        sb.AppendLine("}");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("`MainView` has to be registered for that last resolve to succeed. A window has a public");
+        sb.AppendLine("constructor, so the attribute is enough:");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("[Register]");
+        sb.AppendLine("public partial class MainView : Window { }");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("Without it, `GetRequiredService<MainView>()` throws *No service for type ... has been");
+        sb.AppendLine("registered* at startup. The same applies to anything else resolved here.");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("Three things about that sequence are load-bearing:");
+        sb.AppendLine("");
+        sb.AppendLine("- **`AddRegistrations` is called on the entry-point project only.** It cascades into");
+        sb.AppendLine("  everything else. Calling it on several projects is harmless but redundant.");
+        sb.AppendLine("- **`Initialize` comes after `BuildServiceProvider`,** and before anything resolves.");
+        sb.AppendLine("  `CurrentProvider` throws until it has run, naming its own cause.");
+        sb.AppendLine("- **The window is resolved, not constructed.** `new MainView()` would bypass the");
+        sb.AppendLine("  container and leave its dependencies unwired.");
+        sb.AppendLine("");
+        sb.AppendLine("A console or service host differs only in what it resolves at the end; the three lines");
+        sb.AppendLine("before that are the same.");
+        sb.AppendLine("");
+        sb.AppendLine("A project referenced by two others has `AddRegistrations` called twice. That is harmless:");
+        sb.AppendLine("the scan detects identical repeats and collapses them.");
+        sb.AppendLine("");
+        sb.AppendLine("The shared components — the attribute, the interfaces, the scanner, the locator — are");
+        sb.AppendLine("generated once into **" + infraName + "**, the deepest project, which every other project");
+        sb.AppendLine("already references transitively.");
+        sb.AppendLine("");
+        sb.AppendLine("---");
+        sb.AppendLine("");
+        sb.AppendLine("## Registering a type");
+        sb.AppendLine("");
+        sb.AppendLine("Three mechanisms, chosen by who owns the type and whether reflection can construct it.");
+        sb.AppendLine("");
+        sb.AppendLine("### `[Register]` — the default");
+        sb.AppendLine("");
+        sb.AppendLine("You own the type and it has a **public** constructor.");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("[Register]                                              // as itself, Singleton");
+        sb.AppendLine("[Register(typeof(IThing))]                              // against an interface");
+        sb.AppendLine("[Register(typeof(IThing), ServiceLifetime.Transient)]   // and a lifetime");
+        sb.AppendLine("public class Thing : IThing { }");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("`AllowMultiple`, so one class can be resolvable under several interfaces.");
+        sb.AppendLine("");
+        sb.AppendLine("The public constructor matters: the scan activates types by reflection, which cannot reach");
+        sb.AppendLine("an `internal` or `protected` constructor. A type with one needs the next mechanism.");
+        sb.AppendLine("");
+        sb.AppendLine("### `AddManualRegistrations` — you own it, reflection cannot build it");
+        sb.AppendLine("");
+        sb.AppendLine("In `{Project}/ServiceCollectionExtensions.Manual.cs`. A factory written there is compiled");
+        sb.AppendLine("code in the same assembly, so it reaches a non-public constructor that reflection cannot.");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("static partial void AddManualRegistrations(IServiceCollection services) {");
+        sb.AppendLine("    services.AddSingleton<MainViewModel>(_ => new MainViewModel());");
+        sb.AppendLine("    services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connectionString));");
+        sb.AppendLine("}");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("Use it for a non-public constructor, an options lambda, or a lifetime decided at runtime.");
+        sb.AppendLine("");
+        sb.AppendLine("This file is created once by DISetup and never regenerated.");
+        sb.AppendLine("");
+        sb.AppendLine("### `IAddRegistrations` — you do not own the type");
+        sb.AppendLine("");
+        sb.AppendLine("A scaffolded entity, generated code, something from a package — anything you cannot");
+        sb.AppendLine("decorate. Implement the interface in its own class under `DI/`:");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("public class EntityLoaderRegistrations : IAddRegistrations {");
+        sb.AppendLine("    public void AddRegistrations(IServiceCollection services) {");
+        sb.AppendLine("        foreach (var type in Assembly.GetExecutingAssembly().GetTypes()) {");
+        sb.AppendLine("            // ...register whatever matches...");
+        sb.AppendLine("        }");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("The scan finds every implementation, so any number can coexist — several code generators");
+        sb.AppendLine("can contribute to one project without colliding. Implementations need a public");
+        sb.AppendLine("parameterless constructor.");
+        sb.AppendLine("");
+        sb.AppendLine("This is the mechanism most easily missed, and the answer whenever the type you want to");
+        sb.AppendLine("register is one you cannot edit.");
+        sb.AppendLine("");
+        sb.AppendLine("---");
+        sb.AppendLine("");
+        sb.AppendLine("## Replacing a registration");
+        sb.AppendLine("");
+        sb.AppendLine("The three above all *add*. Replacing is a separate concern, and has its own interface.");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("public class TestSubstitutions : IOverrideRegistrations {");
+        sb.AppendLine("    public void ReplaceRegistrations(IServiceCollection services) {");
+        sb.AppendLine("        services.AddTransient<IClock, FixedClock>();");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("Overrides run last, after the scan and after every `IAddRegistrations` contributor, and");
+        sb.AppendLine("are exempt from duplicate validation — replacing is the declared intent. Use plain `Add*`");
+        sb.AppendLine("calls; the scanner removes whatever the same service type was registered as before.");
+        sb.AppendLine("");
+        sb.AppendLine("Two uses: resolving a conflict between independently generated registrations, and");
+        sb.AppendLine("substituting behaviour in a test project.");
+        sb.AppendLine("");
+        sb.AppendLine("### When registrations conflict");
+        sb.AppendLine("");
+        sb.AppendLine("If two sources register the same service type differently, the scan throws and lists every");
+        sb.AppendLine("conflict at once:");
+        sb.AppendLine("");
+        sb.AppendLine("```");
+        sb.AppendLine("Conflicting DI registrations in 'MyProject':");
+        sb.AppendLine("  MyProject.IThing -> MyProject.ThingA (Singleton), MyProject.ThingB (Singleton)");
+        sb.AppendLine("Use IOverrideRegistrations to replace a registration deliberately.");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("Identical repeats are not conflicts — those come from the same project being reached twice");
+        sb.AppendLine("through the dependency graph, and are collapsed silently.");
+        sb.AppendLine("");
+        sb.AppendLine("---");
+        sb.AppendLine("");
+        sb.AppendLine("## The service locator");
+        sb.AppendLine("");
+        sb.AppendLine("A type should receive its **business domain** dependencies through its constructor —");
+        sb.AppendLine("the ones without which it would not be in a valid state.[^1] Those belong in the");
+        sb.AppendLine("signature, where the compiler enforces them and a reader can see what the type needs.");
+        sb.AppendLine("");
+        sb.AppendLine("Two other kinds of dependency do not belong there.");
+        sb.AppendLine("");
+        sb.AppendLine("**Those that cannot be injected.** A static `Instance` property has no constructor to");
+        sb.AppendLine("inject into. A view constructed by XAML is built by the framework, not the container. A");
+        sb.AppendLine("design-time fallback runs in a process where no container was ever built.[^2]");
+        sb.AppendLine("");
+        sb.AppendLine("**Those that should not be injected.** Infrastructure a type merely *uses* rather than");
+        sb.AppendLine("*is defined by* — a logger, a connection, a performance counter — is not part of what");
+        sb.AppendLine("makes an instance valid. Threading it through every constructor adds a parameter to");
+        sb.AppendLine("every type and a line to every call site, obscuring the dependencies that do matter.");
+        sb.AppendLine("Lazily instantiated properties are the same case: the point is to defer the cost until");
+        sb.AppendLine("something asks, which a constructor parameter defeats.[^3]");
+        sb.AppendLine("");
+        sb.AppendLine("For both, resolve at the point of use:");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("// Infrastructure — used, not definitional. Resolved per access, not stored.");
+        sb.AppendLine("private ILogger Logger => " + infraNamespace + ".ServiceLocator.CurrentProvider.GetRequiredService<ILogger>();");
+        sb.AppendLine("");
+        sb.AppendLine("// Lazy property — the cost is paid on first read, not on construction.");
+        sb.AppendLine("private IReportBuilder Builder => field ??= " + infraNamespace + ".ServiceLocator.CurrentProvider.GetRequiredService<IReportBuilder>();");
+        sb.AppendLine("");
+        sb.AppendLine("// Static Instance — no constructor to inject into.");
+        sb.AppendLine("public static MainModel Instance => DesignTimeSingleton<MainModel>.Resolve(() => new MainModel());");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("`Initialize` is called once at startup. `CurrentProvider` throws rather than returning");
+        sb.AppendLine("null when nothing has been initialized, so the failure names its own cause.");
+        sb.AppendLine("");
+        sb.AppendLine("The line to hold: if a dependency defines what the type *is*, it goes in the");
+        sb.AppendLine("constructor. If it is something the type *uses*, the locator is the better place.");
+        sb.AppendLine("");
+        sb.AppendLine("[^1]: A repository an order service cannot function without; a validator a form is");
+        sb.AppendLine("    meaningless without. Constructing one of these without its dependency should be");
+        sb.AppendLine("    impossible, which is exactly what a constructor parameter guarantees.");
+        sb.AppendLine("");
+        sb.AppendLine("[^2]: See `DesignTimeSingleton`, which resolves from the container and falls back to a");
+        sb.AppendLine("    directly constructed instance only when the process is the XAML designer's — so a");
+        sb.AppendLine("    resolution failure in production or in a test still propagates as a real bug.");
+        sb.AppendLine("");
+        sb.AppendLine("[^3]: `field ??=` in a property getter resolves once, on first access, and caches. A");
+        sb.AppendLine("    constructor parameter would resolve for every instance whether or not anything");
+        sb.AppendLine("    ever reads it.");
+        sb.AppendLine("");
+        sb.AppendLine("---");
+        sb.AppendLine("");
+        sb.AppendLine("## Testing");
+        sb.AppendLine("");
+        sb.AppendLine("### The problem");
+        sb.AppendLine("");
+        sb.AppendLine("A `ServiceCollection` is an ordinary object, so building one per test gives complete");
+        sb.AppendLine("isolation for free. But code reached *through the locator* — anything calling");
+        sb.AppendLine("`SomeType.Instance` — does not resolve from your provider. It resolves from whatever");
+        sb.AppendLine("`ServiceLocator` currently holds, which without care means whatever the last test set.");
+        sb.AppendLine("");
+        sb.AppendLine("### Most tests need nothing special");
+        sb.AppendLine("");
+        sb.AppendLine("If the code under test receives its dependencies through its constructor, resolve directly");
+        sb.AppendLine("and ignore the locator entirely:");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("var services = new ServiceCollection();");
+        sb.AppendLine("" + entryNamespace + ".ServiceCollectionExtensions.AddRegistrations(services);");
+        sb.AppendLine("var provider = services.BuildServiceProvider();");
+        sb.AppendLine("");
+        sb.AppendLine("var thing = provider.GetRequiredService<IThing>();");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("No scoping, no cleanup beyond disposing the provider. Prefer this.");
+        sb.AppendLine("");
+        sb.AppendLine("### When the code calls `.Instance`");
+        sb.AppendLine("");
+        sb.AppendLine("Then the locator has to point at your container for the duration of the test:");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("using (ServiceLocator.UseProvider(provider)) {");
+        sb.AppendLine("    var model = MainModel.Instance;   // resolves from YOUR provider");
+        sb.AppendLine("}");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("Disposing restores whatever was in effect before, so nested and sequential scopes both");
+        sb.AppendLine("behave. The scope uses `AsyncLocal` rather than `[ThreadStatic]`: a thread-static value");
+        sb.AppendLine("does not survive an `await` — the continuation can resume on a different pool thread — so");
+        sb.AppendLine("an async test would silently fall back to the default provider.");
+        sb.AppendLine("");
+        sb.AppendLine("### Substituting a registration");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("var services = new ServiceCollection();");
+        sb.AppendLine("" + entryNamespace + ".ServiceCollectionExtensions.AddRegistrations(services);");
+        sb.AppendLine("services.Replace(ServiceDescriptor.Transient<IClock, FixedClock>());");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("`Replace` after `AddRegistrations`, not before: it matches on service type regardless of");
+        sb.AppendLine("how the original was registered, so it supersedes even a factory registration. One");
+        sb.AppendLine("statement rather than a remove followed by an add, so there is no stale descriptor to");
+        sb.AppendLine("leave behind if the removal misses.");
+        sb.AppendLine("");
+        sb.AppendLine("`Microsoft.Extensions.DependencyInjection.Extensions` provides `Replace` and `RemoveAll`.");
+        sb.AppendLine("");
+        sb.AppendLine("### Composing the pieces");
+        sb.AppendLine("");
+        sb.AppendLine("A base class layers suite-wide substitutions under per-test ones:");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("public abstract class TestBase {");
+        sb.AppendLine("");
+        sb.AppendLine("    protected ServiceProvider Provider { get; private set; } = null!;");
+        sb.AppendLine("    private IDisposable? _scope;");
+        sb.AppendLine("");
+        sb.AppendLine("    [TestInitialize] public void Initialize() => BuildProvider(null);");
+        sb.AppendLine("    [TestCleanup]    public void Teardown()   => ReleaseProvider();");
+        sb.AppendLine("");
+        sb.AppendLine("    /// Suite-wide registrations. Derived classes call base first, then layer their own.");
+        sb.AppendLine("    protected virtual void ConfigureServices(IServiceCollection services) {");
+        sb.AppendLine("        " + entryNamespace + ".ServiceCollectionExtensions.AddRegistrations(services);");
+        sb.AppendLine("    }");
+        sb.AppendLine("");
+        sb.AppendLine("    protected void RebuildProviderWithOverrides(Action<IServiceCollection> overrides) {");
+        sb.AppendLine("        ReleaseProvider();");
+        sb.AppendLine("        BuildProvider(overrides);");
+        sb.AppendLine("    }");
+        sb.AppendLine("");
+        sb.AppendLine("    private void BuildProvider(Action<IServiceCollection>? overrides) {");
+        sb.AppendLine("        var services = new ServiceCollection();");
+        sb.AppendLine("        ConfigureServices(services);");
+        sb.AppendLine("        overrides?.Invoke(services);");
+        sb.AppendLine("");
+        sb.AppendLine("        Provider = services.BuildServiceProvider();");
+        sb.AppendLine("        _scope = ServiceLocator.UseProvider(Provider);");
+        sb.AppendLine("    }");
+        sb.AppendLine("");
+        sb.AppendLine("    private void ReleaseProvider() {");
+        sb.AppendLine("        // Provider FIRST. Disposing it disposes the services it created, and their Dispose");
+        sb.AppendLine("        // methods may resolve through the locator — releasing the scope first would leave");
+        sb.AppendLine("        // them with no provider to reach.");
+        sb.AppendLine("        Provider?.Dispose();");
+        sb.AppendLine("        _scope?.Dispose();");
+        sb.AppendLine("        _scope = null;");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("That disposal order is not obvious until it bites: a service whose `Dispose` touches");
+        sb.AppendLine("`.Instance` throws during teardown if the scope has already gone.");
+        sb.AppendLine("");
+        sb.AppendLine("One related trap: a lazy property read from inside `Dispose` **constructs** the object it");
+        sb.AppendLine("is trying to dispose. Read the backing field there, not the property.");
+        sb.AppendLine("");
+        sb.AppendLine("---");
+        sb.AppendLine("");
+        sb.AppendLine("## Files");
+        sb.AppendLine("");
+        sb.AppendLine("Generated, overwritten every run:");
+        sb.AppendLine("");
+        sb.AppendLine("| File | Where |");
+        sb.AppendLine("|---|---|");
+        sb.AppendLine("| `RegisterAttribute.g.cs` | `" + infraName + "/DI/` |");
+        sb.AppendLine("| `IAddRegistrations.g.cs` | `" + infraName + "/DI/` |");
+        sb.AppendLine("| `IOverrideRegistrations.g.cs` | `" + infraName + "/DI/` |");
+        sb.AppendLine("| `ServiceLocator.g.cs` | `" + infraName + "/DI/` |");
+        sb.AppendLine("| `RegistrationScanner.g.cs` | `" + infraName + "/DI/` |");
+        sb.AppendLine("| `ServiceCollectionExtensions.g.cs` | every project's `DI/` |");
+        sb.AppendLine("");
+        sb.AppendLine("Created once, then yours:");
+        sb.AppendLine("");
+        sb.AppendLine("| File | Where |");
+        sb.AppendLine("|---|---|");
+        sb.AppendLine("| `ServiceCollectionExtensions.Manual.cs` | every project's root |");
+        sb.AppendLine("");
+        sb.AppendLine("Hand-written, wherever you put them: `IAddRegistrations` and `IOverrideRegistrations`");
+        sb.AppendLine("implementations, conventionally under `DI/`.");
+        sb.AppendLine("");
+        sb.AppendLine("Test projects are skipped entirely.");
+        return sb.ToString();
+    }
+
 #>
