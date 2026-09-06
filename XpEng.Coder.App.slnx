@@ -12,6 +12,7 @@
     <File Path="BasicTemplates/Shared/TemplateLog.ttinclude" />
   </Folder>
   <Folder Name="/BasicTemplates/WPF/">
+    <File Path="BasicTemplates/WPF/DesignTimeSetup.tt" />
     <File Path="BasicTemplates/WPF/DISetup.tt" />
     <File Path="BasicTemplates/WPF/PlanSetup.tt" />
   </Folder>

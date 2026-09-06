@@ -177,6 +177,11 @@
         sb.AppendLine();
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
+        // These files sit in a folder whose name is deliberately NOT part of the namespace —
+        // the attribute and interfaces are applied all over each project, and a folder-derived
+        // namespace would mean a using directive on every one of those files.
+        sb.AppendLine("#pragma warning disable IDE0130 // Namespace does not match folder structure");
+        sb.AppendLine();
         return sb.ToString();
     }
 
@@ -618,18 +623,6 @@
         sb.AppendLine("");
         sb.AppendLine("    base.OnStartup(e);");
         sb.AppendLine("}");
-        sb.AppendLine("```");
-        sb.AppendLine("");
-        sb.AppendLine("`MainView` has to be registered for that last resolve to succeed. A window has a public");
-        sb.AppendLine("constructor, so the attribute is enough:");
-        sb.AppendLine("");
-        sb.AppendLine("```csharp");
-        sb.AppendLine("[Register]");
-        sb.AppendLine("public partial class MainView : Window { }");
-        sb.AppendLine("```");
-        sb.AppendLine("");
-        sb.AppendLine("Without it, `GetRequiredService<MainView>()` throws *No service for type ... has been");
-        sb.AppendLine("registered* at startup. The same applies to anything else resolved here.");
         sb.AppendLine("```");
         sb.AppendLine("");
         sb.AppendLine("Three things about that sequence are load-bearing:");

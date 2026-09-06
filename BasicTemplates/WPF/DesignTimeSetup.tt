@@ -41,7 +41,7 @@
     // own process, where App.xaml.cs never runs at all.
     //
     // PREREQUISITE: DISetup must have run first. DesignTimeSingleton resolves through
-    // ApplicationServices, which DISetup generates.
+    // ServiceLocator, which DISetup generates.
     // ============================================================
 
     if (!HasArguments) {
@@ -77,17 +77,17 @@
     var infrastructureProject = productionProjects.Last();
     Log($"Infrastructure  : {infrastructureProject.ProjectName} (tier {infrastructureProject.Tier})");
 
-    // PREREQUISITE CHECK — generating against a missing ApplicationServices would produce a
+    // PREREQUISITE CHECK — generating against a missing ServiceLocator would produce a
     // compile error pointing at the generated file rather than at the actual cause.
-    string applicationServicesPath = FindApplicationServices(infrastructureProject);
-    if (string.IsNullOrWhiteSpace(applicationServicesPath)) {
+    string serviceLocatorPath = FindServiceLocator(infrastructureProject);
+    if (string.IsNullOrWhiteSpace(serviceLocatorPath)) {
         LogError(
-            "ApplicationServices was not found in " + infrastructureProject.ProjectName + ". " +
+            "ServiceLocator was not found in " + infrastructureProject.ProjectName + ". " +
             "Run the DISetup template first — DesignTimeSingleton resolves through it.",
             solutionFilePath);
         return string.Empty;
     }
-    Log($"ApplicationServices found: {MakeRelativePath(SolutionDirectory, applicationServicesPath)}");
+    Log($"ServiceLocator found: {MakeRelativePath(SolutionDirectory, serviceLocatorPath)}");
 
     // The module initializer needs PresentationFramework, so it goes to the entry point that
     // actually enables WPF. Detected structurally via <UseWPF>, not by a name convention —
@@ -127,11 +127,21 @@
     Log($"[{wpfProject.ProjectName}] -> project root");
     WriteDesignTimeFile(wpfProject.ProjectDirectory, "DesignTimeModuleInitializer.g.cs", BuildModuleInitializer(wpfProject, infrastructureProject), ref filesWritten);
 
+    // Documentation of the mechanism, copied beside the arguments file. Overwritten every
+    // run: nobody edits it, and a stale copy describing a mechanism that has since changed is
+    // worse than none.
+    string readmePath = Path.Combine(Path.GetDirectoryName(solutionFilePath), "CoderFiles", "README-DesignTime.md");
+    Directory.CreateDirectory(Path.GetDirectoryName(readmePath));
+    File.WriteAllText(readmePath, BuildReadme(infrastructureProject, wpfProject));
+    Log("");
+    Log("Wrote " + MakeRelativePath(SolutionDirectory, readmePath));
+
     Log("");
     Log($"Done. {filesWritten} file(s) written.");
     Log("");
     Log("Next: give each singleton an Instance property resolving through DesignTimeSingleton, e.g.");
     Log("    public static MainModel Instance => DesignTimeSingleton<MainModel>.Resolve(() => new MainModel());");
+    Log("See CoderFiles/README-DesignTime.md for the rest.");
 
     FlushLog(solutionFilePath);
 
@@ -154,12 +164,12 @@
         catch { return false; }
     }
 
-    /// Looks for ApplicationServices anywhere in the project — DISetup writes it to a folder
-    /// the operator can configure, so its exact location is not fixed.
-    private string FindApplicationServices(SolutionProject project) {
+    /// Looks for ServiceLocator anywhere in the project — DISetup writes it to a folder the
+    /// operator can configure, so its exact location is not fixed.
+    private string FindServiceLocator(SolutionProject project) {
         if (!Directory.Exists(project.ProjectDirectory)) return string.Empty;
 
-        foreach (string file in Directory.GetFiles(project.ProjectDirectory, "ApplicationServices*.cs", SearchOption.AllDirectories)) {
+        foreach (string file in Directory.GetFiles(project.ProjectDirectory, "ServiceLocator*.cs", SearchOption.AllDirectories)) {
             string folderName = Path.GetFileName(Path.GetDirectoryName(file));
             if (folderName.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
                 folderName.Equals("obj", StringComparison.OrdinalIgnoreCase)) continue;
@@ -184,6 +194,11 @@
         sb.AppendLine("// </auto-generated>");
         sb.AppendLine();
         sb.AppendLine("#nullable enable");
+        sb.AppendLine();
+        // These files sit in a folder whose name is deliberately NOT part of the namespace —
+        // the attribute and interfaces are applied all over each project, and a folder-derived
+        // namespace would mean a using directive on every one of those files.
+        sb.AppendLine("#pragma warning disable IDE0130 // Namespace does not match folder structure");
         sb.AppendLine();
         return sb.ToString();
     }
@@ -233,7 +248,7 @@
         sb.AppendLine();
         sb.AppendLine("    public static T Resolve(Func<T> constructFallback) {");
         sb.AppendLine("        try {");
-        sb.AppendLine("            return " + project.RootNamespace + ".ApplicationServices.Provider.GetRequiredService<T>();");
+        sb.AppendLine("            return " + project.RootNamespace + ".ServiceLocator.CurrentProvider.GetRequiredService<T>();");
         sb.AppendLine("        }");
         sb.AppendLine("        catch {");
         sb.AppendLine("            if (!DesignTimeDetector.IsInDesignMode) throw;");
@@ -274,4 +289,194 @@
         sb.AppendLine("}");
         return sb.ToString();
     }
+
+    /// The design-time documentation, written beside the arguments file. Overwritten every
+    /// run: nobody edits it, and a stale copy describing a mechanism that has since changed
+    /// is worse than none.
+    private string BuildReadme(SolutionProject infrastructureProject, SolutionProject wpfProject) {
+        string infraName = infrastructureProject.ProjectName;
+        string infraNamespace = infrastructureProject.RootNamespace;
+        string wpfName = wpfProject.ProjectName;
+
+        var sb = new StringBuilder();
+        sb.AppendLine("# Design-time support");
+        sb.AppendLine("");
+        sb.AppendLine("Generated by the DesignTimeSetup template. This file is overwritten on every run.");
+        sb.AppendLine("");
+        sb.AppendLine("See also `README-DependencyInjection.md` — this mechanism sits on top of `ServiceLocator`,");
+        sb.AppendLine("which DISetup generates.");
+        sb.AppendLine("");
+        sb.AppendLine("---");
+        sb.AppendLine("");
+        sb.AppendLine("## The problem");
+        sb.AppendLine("");
+        sb.AppendLine("The XAML designer renders your views in **its own process**. It loads your compiled");
+        sb.AppendLine("assembly to do so, but it never runs `App.xaml.cs` — there is no application startup, so");
+        sb.AppendLine("no `ServiceCollection` is built and `ServiceLocator.Initialize` is never called.");
+        sb.AppendLine("");
+        sb.AppendLine("Anything resolving through the locator therefore throws while the designer is rendering:");
+        sb.AppendLine("");
+        sb.AppendLine("```");
+        sb.AppendLine("The service provider has not been built. Call ServiceLocator.Initialize(provider) ...");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("The symptom is rarely that message. A binding evaluated during rendering swallows the");
+        sb.AppendLine("exception, so what you see is a **blank canvas** — the window chrome draws, the content");
+        sb.AppendLine("does not — or a designer error with no obvious connection to DI. That is the failure this");
+        sb.AppendLine("mechanism prevents.");
+        sb.AppendLine("");
+        sb.AppendLine("It matters because a view whose `DataContext` comes from a static `Instance` property");
+        sb.AppendLine("cannot render without resolving something:");
+        sb.AppendLine("");
+        sb.AppendLine("```xml");
+        sb.AppendLine("<Window DataContext=\"{x:Static viewModels:MainViewModel.Instance}\">");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("`x:Static` is not a passive reference — the designer evaluates the property, which resolves");
+        sb.AppendLine("through the locator, which throws.");
+        sb.AppendLine("");
+        sb.AppendLine("---");
+        sb.AppendLine("");
+        sb.AppendLine("## The mechanism");
+        sb.AppendLine("");
+        sb.AppendLine("Three generated files.");
+        sb.AppendLine("");
+        sb.AppendLine("### `DesignTimeDetector` — the flag");
+        sb.AppendLine("");
+        sb.AppendLine("In **" + infraName + "**, a static `bool`. Nothing more: it holds whether the current process is");
+        sb.AppendLine("the designer's, and has no dependency on WPF.");
+        sb.AppendLine("");
+        sb.AppendLine("### `DesignTimeModuleInitializer` — sets the flag");
+        sb.AppendLine("");
+        sb.AppendLine("In **" + wpfName + "**, the WPF project. It calls");
+        sb.AppendLine("`DesignerProperties.GetIsInDesignMode(new DependencyObject())` — the reliable check — and");
+        sb.AppendLine("writes the result to the flag.");
+        sb.AppendLine("");
+        sb.AppendLine("**Why the split.** `DesignerProperties` lives in `PresentationFramework`, which only a");
+        sb.AppendLine("project with `<UseWPF>true</UseWPF>` has. Putting the detection in " + infraName + " would force");
+        sb.AppendLine("a WPF dependency onto a project that has no other reason for one, and would make it");
+        sb.AppendLine("unusable from a console host or a non-WPF front end. So the detection lives where the");
+        sb.AppendLine("reference already exists, and only a plain `bool` crosses the boundary.");
+        sb.AppendLine("");
+        sb.AppendLine("**Why a module initializer.** `[ModuleInitializer]` runs when the assembly loads, into any");
+        sb.AppendLine("process — including the designer's, which loads the assembly to render but never runs");
+        sb.AppendLine("application startup. A call from `App.xaml.cs` would never execute in the one case that");
+        sb.AppendLine("needs it.");
+        sb.AppendLine("");
+        sb.AppendLine("### `DesignTimeSingleton<T>` — resolve, or fall back");
+        sb.AppendLine("");
+        sb.AppendLine("In **" + infraName + "**. Resolves `T` from the container, and falls back to a directly");
+        sb.AppendLine("constructed instance **only** when the container is unavailable *and* the process is the");
+        sb.AppendLine("designer's:");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("public static T Resolve(Func<T> constructFallback) {");
+        sb.AppendLine("    try {");
+        sb.AppendLine("        return ServiceLocator.CurrentProvider.GetRequiredService<T>();");
+        sb.AppendLine("    }");
+        sb.AppendLine("    catch {");
+        sb.AppendLine("        if (!DesignTimeDetector.IsInDesignMode) throw;");
+        sb.AppendLine("        lock (_lock) { return _designTimeFallback ??= constructFallback(); }");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("The design-mode condition is the important part. A resolution failure in production or in a");
+        sb.AppendLine("test is a real bug and must propagate. Only the designer — where the container genuinely");
+        sb.AppendLine("was never built — gets a substitute, so a view can still render.");
+        sb.AppendLine("");
+        sb.AppendLine("It is a generic static class, so each closed type gets its own fallback field with no");
+        sb.AppendLine("per-type code.");
+        sb.AppendLine("");
+        sb.AppendLine("---");
+        sb.AppendLine("");
+        sb.AppendLine("## Wiring a singleton");
+        sb.AppendLine("");
+        sb.AppendLine("The template installs the mechanism. It does **not** rewrite your existing classes — that");
+        sb.AppendLine("would mean editing hand-written code, which no template here does. Each singleton needs");
+        sb.AppendLine("its `Instance` property changed by hand, once:");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("// Before — a plain Lazy<T>. Never involves the container, so DI cannot own the lifetime");
+        sb.AppendLine("// and a test cannot substitute it.");
+        sb.AppendLine("private static readonly Lazy<MainModel> _instance = new(() => new MainModel());");
+        sb.AppendLine("public static MainModel Instance => _instance.Value;");
+        sb.AppendLine("");
+        sb.AppendLine("// After");
+        sb.AppendLine("public static MainModel Instance => DesignTimeSingleton<MainModel>.Resolve(() => new MainModel());");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("Plus `using " + infraNamespace + ".Services;`.");
+        sb.AppendLine("");
+        sb.AppendLine("Two things have to line up, or it fails at runtime rather than compile time:");
+        sb.AppendLine("");
+        sb.AppendLine("**The type must be registered.** `[Register]` if its constructor is public; a factory in");
+        sb.AppendLine("`ServiceCollectionExtensions.Manual.cs` if it is `internal` or `protected internal`.");
+        sb.AppendLine("Without a registration, `GetRequiredService` throws — and in production the fallback");
+        sb.AppendLine("deliberately does not fire, so it propagates.");
+        sb.AppendLine("");
+        sb.AppendLine("**The fallback lambda must reach the constructor.** `() => new MainModel()` is written");
+        sb.AppendLine("inside the class, so a non-public constructor is fine there.");
+        sb.AppendLine("");
+        sb.AppendLine("### Which classes need this");
+        sb.AppendLine("");
+        sb.AppendLine("Anything with a static `Instance` that a XAML binding touches — typically the root model");
+        sb.AppendLine("and the root view model. A child view model constructed directly by its parent does not,");
+        sb.AppendLine("since nothing resolves it.");
+        sb.AppendLine("");
+        sb.AppendLine("---");
+        sb.AppendLine("");
+        sb.AppendLine("## Recognising the failure");
+        sb.AppendLine("");
+        sb.AppendLine("| What you see | Likely cause |");
+        sb.AppendLine("|---|---|");
+        sb.AppendLine("| Blank designer canvas, no error | An `Instance` property still resolves without the fallback |");
+        sb.AppendLine("| Renders in the designer, throws at runtime | The type was never registered; only the fallback was working |");
+        sb.AppendLine("| Blank canvas after adding a new view model | Its `Instance` was not wired to `DesignTimeSingleton` |");
+        sb.AppendLine("");
+        sb.AppendLine("A useful check: if a view renders under `dotnet run` but not in the designer, the cause is");
+        sb.AppendLine("almost always a resolution happening before `Initialize` — which in the designer means");
+        sb.AppendLine("always.");
+        sb.AppendLine("");
+        sb.AppendLine("### A related trap");
+        sb.AppendLine("");
+        sb.AppendLine("A constructor that resolves through the locator makes its type unconstructible in the");
+        sb.AppendLine("designer even when the type itself is wired correctly, because the failure happens one");
+        sb.AppendLine("level down. If a view model's constructor calls `SomeModel.Instance`, guard it:");
+        sb.AppendLine("");
+        sb.AppendLine("```csharp");
+        sb.AppendLine("public DashboardViewModel() {");
+        sb.AppendLine("    if (DesignTimeDetector.IsInDesignMode) return;   // skip work the designer cannot do");
+        sb.AppendLine("    // ...load data, resolve services...");
+        sb.AppendLine("}");
+        sb.AppendLine("```");
+        sb.AppendLine("");
+        sb.AppendLine("Guard the narrowest thing that actually fails, not the whole constructor — a constructor");
+        sb.AppendLine("that returns early may leave the object in a state the view cannot render either.");
+        sb.AppendLine("");
+        sb.AppendLine("---");
+        sb.AppendLine("");
+        sb.AppendLine("## Files");
+        sb.AppendLine("");
+        sb.AppendLine("Generated, overwritten every run:");
+        sb.AppendLine("");
+        sb.AppendLine("| File | Where |");
+        sb.AppendLine("|---|---|");
+        sb.AppendLine("| `DesignTimeDetector.g.cs` | `" + infraName + "/Services/` |");
+        sb.AppendLine("| `DesignTimeSingleton.g.cs` | `" + infraName + "/Services/` |");
+        sb.AppendLine("| `DesignTimeModuleInitializer.g.cs` | `" + wpfName + "/` |");
+        sb.AppendLine("");
+        sb.AppendLine("Hand-written: the `Instance` property on each singleton, and any design-mode guard in a");
+        sb.AppendLine("constructor.");
+        sb.AppendLine("");
+        sb.AppendLine("---");
+        sb.AppendLine("");
+        sb.AppendLine("## Prerequisite");
+        sb.AppendLine("");
+        sb.AppendLine("DISetup must have run first — `DesignTimeSingleton` resolves through `ServiceLocator`,");
+        sb.AppendLine("which DISetup generates. This template checks for it and stops with a clear message rather");
+        sb.AppendLine("than emitting code that will not compile.");
+        return sb.ToString();
+    }
+
 #>

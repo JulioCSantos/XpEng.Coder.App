@@ -12,7 +12,7 @@ namespace XpEng.Coder80.Infrastructure.Services;
 /// </summary>
 public static class TemplateArgumentsFile {
 
-    public const string FolderName = "CoderTemplates";
+    public const string FolderName = "CoderFiles";
 
     /// <summary>The CoderTemplates folder beside the solution file, created if absent.</summary>
     public static string GetFolder(string solutionFilePath) {

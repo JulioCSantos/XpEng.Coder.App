@@ -1,0 +1,21 @@
+# DesignTimeSetup — run at 2026-09-05 13:48:02
+
+[13:48:02] Arguments file  : C:\Users\julio\source\repos\JullioSanntos\CodeGeneratorServices\XpEng.Coder.App\CoderFiles\DesignTimeSetup.args.txt
+[13:48:02] SolutionFilePath: C:\Users\julio\source\repos\JullioSanntos\CodeGeneratorServices\XpEng.Coder.App\XpEng.Coder.App.slnx
+[13:48:02] Infrastructure  : XpEng.Coder80.Infrastructure (tier 4)
+[13:48:02] ServiceLocator found: XpEng.Coder\XpEng.Coder80.Infrastructure\DI\ServiceLocator.g.cs
+[13:48:02] WPF entry point : XpEng.Coder03.Views (tier 1)
+[13:48:02] 
+[13:48:02] [XpEng.Coder80.Infrastructure] -> Services
+[13:48:02]     wrote DesignTimeDetector.g.cs
+[13:48:02]     wrote DesignTimeSingleton.g.cs
+[13:48:02] [XpEng.Coder03.Views] -> project root
+[13:48:02]     wrote DesignTimeModuleInitializer.g.cs
+[13:48:02] 
+[13:48:02] Wrote CoderFiles\README-DesignTime.md
+[13:48:02] 
+[13:48:02] Done. 3 file(s) written.
+[13:48:02] 
+[13:48:02] Next: give each singleton an Instance property resolving through DesignTimeSingleton, e.g.
+[13:48:02]     public static MainModel Instance => DesignTimeSingleton<MainModel>.Resolve(() => new MainModel());
+[13:48:02] See CoderFiles/README-DesignTime.md for the rest.
