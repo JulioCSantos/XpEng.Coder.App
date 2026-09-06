@@ -6,6 +6,101 @@ in each project's `ServiceCollectionExtensions.Manual.cs`, which is never regene
 
 ---
 
+## Why not just register everything in `Program.cs`?
+
+The common pattern puts every registration in the entry point:
+
+```csharp
+builder.Services.AddSingleton<IOrderService, OrderService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddTransient<IEmailSender, SmtpEmailSender>();
+// ...forty more lines...
+```
+
+It works, and for a single-project application it is the right amount of machinery. Past
+that it has four specific problems this setup is meant to solve.
+
+**Registration drifts from the type.** A new service means editing a file in another
+project. A deleted service leaves its registration behind — one that still compiles, still
+runs, and fails only when something resolves it. Here the registration is an attribute on
+the class:
+
+```csharp
+[Register(typeof(IOrderService))]
+public class OrderService : IOrderService { }
+
+[Register(typeof(IUserRepository), ServiceLifetime.Scoped)]
+public class UserRepository : IUserRepository { }
+
+[Register(typeof(IEmailSender), ServiceLifetime.Transient)]
+public class SmtpEmailSender : IEmailSender { }
+```
+
+Delete `SmtpEmailSender` and its registration goes with it. There is no other file to
+update and no line left behind naming a type that no longer exists.
+
+**The entry point knows everything.** `Program.cs` ends up referencing every project and
+naming every implementation, which is the opposite of what the project structure was for. A
+UI project acquires a reference to a data project purely so it can name `SqlUserRepository`
+— and once that reference exists the compiler will never again tell you a layer boundary
+was crossed, because you opened it yourself to register something.
+
+Here each project registers what it owns and calls the ones it already depends on. No new
+references, so the dependency graph keeps describing the architecture rather than the
+wiring. If a registration needs a reference that does not exist, that is a design signal
+worth having.
+
+**Conflicts are silent.** Register the same service type twice with different
+implementations and the container keeps whichever ran last. No error — just the wrong
+implementation in production, discovered as behaviour rather than as a stack trace. Here
+the scan throws at startup and names every conflict at once. Replacing a registration is
+still possible, but it has to be said out loud (`IOverrideRegistrations`), which is the
+difference between a decision and an accident.
+
+**Tests get a different container than production.** When composition lives in the entry
+point a test cannot call it. The usual workarounds are hand-building a `ServiceCollection`
+with the four services that test happens to need, or mocking every dependency and inventing
+a state for each.
+
+Neither is the container the application runs. Neither can catch a missing registration, a
+wrong lifetime, or a resolution that fails only once the full graph is present — which is
+to say neither can catch the bugs DI configuration actually produces. The tests are
+structurally blind to their own subject.
+
+The mocking route has a second cost. Set-up code grows until it dwarfs the assertion, and
+every mocked return value is a guess about how the real type behaves — a guess that stays
+green after the real type changes.
+
+> What passes is agreement between the test and its own fiction.
+
+Here a test calls the same `AddRegistrations` the application calls, then `Replace`s what it
+wants substituted. What runs under test is what runs in production, minus the parts
+deliberately swapped. Mock the one thing the test is about — the clock, the payment gateway,
+the thing that would hit the network — and let everything else be real. That is what makes
+behavioural tests practical rather than only narrow unit tests around whatever was cheap to
+fake.
+
+There is a fifth, narrower one. A type exposed as a static `Instance` is normally outside DI
+altogether: one instance per process, no way to substitute it, so everything depending on it
+becomes untestable by association. `ServiceLocator` keeps such a type in the container and
+lets a test point it at its own — a singleton stays a singleton in production without that
+cost.
+
+### When this is more than you need
+
+Everything here solves a problem that appears at a certain size: composition spanning
+several projects, tests that need the real dependency graph, a codebase where a silently
+wrong registration costs more to find than it would have cost to prevent.
+
+If the wiring fits on one screen and one person holds all of it in their head, this
+machinery is overhead. `Program.cs` is simpler, and simpler is correct.
+
+It stops being correct at the point where adding a service means opening a project you were
+not working in — or the first time you ship a registration pointing at the wrong
+implementation and spend an afternoon finding it.
+
+---
+
 ## How the wiring fits together
 
 Every project has a generated `DI/ServiceCollectionExtensions.g.cs` declaring one method:
@@ -36,18 +131,6 @@ protected override void OnStartup(StartupEventArgs e) {
 
     base.OnStartup(e);
 }
-```
-
-`MainView` has to be registered for that last resolve to succeed. A window has a public
-constructor, so the attribute is enough:
-
-```csharp
-[Register]
-public partial class MainView : Window { }
-```
-
-Without it, `GetRequiredService<MainView>()` throws *No service for type ... has been
-registered* at startup. The same applies to anything else resolved here.
 ```
 
 Three things about that sequence are load-bearing:

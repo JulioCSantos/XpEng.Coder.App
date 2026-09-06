@@ -5,6 +5,8 @@
 
 #nullable enable
 
+#pragma warning disable IDE0130 // Namespace does not match folder structure
+
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 
