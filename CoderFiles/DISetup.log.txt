@@ -1,50 +1,50 @@
-# DISetup — run at 2026-09-06 13:38:25
+# DISetup — run at 2026-09-07 14:50:21
 
-[13:38:25] Arguments file  : C:\Users\julio\source\repos\JullioSanntos\CodeGeneratorServices\XpEng.Coder.App\CoderFiles\DISetup.args.txt
-[13:38:25] SolutionFilePath: C:\Users\julio\source\repos\JullioSanntos\CodeGeneratorServices\XpEng.Coder.App\XpEng.Coder.App.slnx
-[13:38:25] Production projects: 7, test projects skipped: 0
-[13:38:25] Shared DI components -> XpEng.Coder80.Infrastructure (tier 4, namespace XpEng.Coder80.Infrastructure)
-[13:38:25] 
-[13:38:25] [XpEng.Coder80.Infrastructure] -> DI
-[13:38:25]     wrote RegisterAttribute.g.cs
-[13:38:25]     wrote IAddRegistrations.g.cs
-[13:38:25]     wrote IOverrideRegistrations.g.cs
-[13:38:25]     wrote ServiceLocator.g.cs
-[13:38:25]     wrote RegistrationScanner.g.cs
-[13:38:25] 
-[13:38:25] [Tier 1] XpEng.Coder03.Views  (namespace XpEng.Coder03.Views)
-[13:38:25]     cascades into: XpEng.Coder06.Data, XpEng.Coder06.ViewModels, XpEng.Coder09.Models, XpEng.Coder80.Infrastructure
-[13:38:25]     wrote ServiceCollectionExtensions.g.cs
-[13:38:25]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
-[13:38:25] [Tier 1] XpEng.Coder90.Tests  (namespace XpEng.Coder90.Tests)
-[13:38:25]     cascades into: XpEng.Coder06.Data, XpEng.Coder06.ViewModels, XpEng.Coder09.Models, XpEng.Coder80.Infrastructure
-[13:38:25]     wrote ServiceCollectionExtensions.g.cs
-[13:38:25]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
-[13:38:25] [Tier 2] XpEng.Coder06.Data  (namespace XpEng.Coder06.Data)
-[13:38:25]     cascades into: XpEng.Coder09.Models, XpEng.Coder80.Infrastructure
-[13:38:25]     wrote ServiceCollectionExtensions.g.cs
-[13:38:25]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
-[13:38:25] [Tier 2] XpEng.Coder06.ViewModels  (namespace XpEng.Coder06.ViewModels)
-[13:38:25]     cascades into: XpEng.Coder09.Models, XpEng.Coder12.Services, XpEng.Coder80.Infrastructure
-[13:38:25]     wrote ServiceCollectionExtensions.g.cs
-[13:38:25]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
-[13:38:25] [Tier 3] XpEng.Coder09.Models  (namespace XpEng.Coder09.Models)
-[13:38:25]     cascades into: XpEng.Coder80.Infrastructure
-[13:38:25]     wrote ServiceCollectionExtensions.g.cs
-[13:38:25]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
-[13:38:25] [Tier 3] XpEng.Coder12.Services  (namespace XpEng.Coder12.Services)
-[13:38:25]     cascades into: XpEng.Coder80.Infrastructure
-[13:38:25]     wrote ServiceCollectionExtensions.g.cs
-[13:38:25]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
-[13:38:25] [Tier 4] XpEng.Coder80.Infrastructure  (namespace XpEng.Coder80.Infrastructure)
-[13:38:25]     wrote ServiceCollectionExtensions.g.cs
-[13:38:25]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
-[13:38:25] 
-[13:38:25] Wrote CoderFiles\README-DependencyInjection.md
-[13:38:25] 
-[13:38:25] Done. 12 file(s) written, 7 existing stub(s) left untouched.
-[13:38:25] 
-[13:38:25] Composition root:
-[13:38:25]     var services = new ServiceCollection();
-[13:38:25]     XpEng.Coder03.Views.ServiceCollectionExtensions.AddRegistrations(services);
-[13:38:25]     XpEng.Coder80.Infrastructure.ServiceLocator.Initialize(services.BuildServiceProvider());
+[14:50:21] Arguments file  : C:\Users\julio\source\repos\JullioSanntos\CodeGeneratorServices\XpEng.Coder.App\CoderFiles\DISetup.args.txt
+[14:50:21] SolutionFilePath: C:\Users\julio\source\repos\JullioSanntos\CodeGeneratorServices\XpEng.Coder.App\XpEng.Coder.App.slnx
+[14:50:21] Production projects: 7, test projects skipped: 0
+[14:50:21] Shared DI components -> XpEng.Coder80.Infrastructure (tier 4, namespace XpEng.Coder80.Infrastructure)
+[14:50:21] 
+[14:50:21] [XpEng.Coder80.Infrastructure] -> DI
+[14:50:21]     wrote RegisterAttribute.g.cs
+[14:50:21]     wrote IAddRegistrations.g.cs
+[14:50:21]     wrote IOverrideRegistrations.g.cs
+[14:50:21]     wrote ServiceLocator.g.cs
+[14:50:21]     wrote RegistrationScanner.g.cs
+[14:50:21] 
+[14:50:21] [Tier 1] XpEng.Coder03.Views  (namespace XpEng.Coder03.Views)
+[14:50:21]     cascades into: XpEng.Coder06.Data, XpEng.Coder06.ViewModels, XpEng.Coder09.Models, XpEng.Coder80.Infrastructure
+[14:50:21]     wrote ServiceCollectionExtensions.g.cs
+[14:50:21]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
+[14:50:21] [Tier 1] XpEng.Coder90.Tests  (namespace XpEng.Coder90.Tests)
+[14:50:21]     cascades into: XpEng.Coder06.Data, XpEng.Coder06.ViewModels, XpEng.Coder09.Models, XpEng.Coder80.Infrastructure
+[14:50:21]     wrote ServiceCollectionExtensions.g.cs
+[14:50:21]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
+[14:50:21] [Tier 2] XpEng.Coder06.Data  (namespace XpEng.Coder06.Data)
+[14:50:21]     cascades into: XpEng.Coder09.Models, XpEng.Coder80.Infrastructure
+[14:50:21]     wrote ServiceCollectionExtensions.g.cs
+[14:50:21]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
+[14:50:21] [Tier 2] XpEng.Coder06.ViewModels  (namespace XpEng.Coder06.ViewModels)
+[14:50:21]     cascades into: XpEng.Coder09.Models, XpEng.Coder12.Services, XpEng.Coder80.Infrastructure
+[14:50:21]     wrote ServiceCollectionExtensions.g.cs
+[14:50:21]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
+[14:50:21] [Tier 3] XpEng.Coder09.Models  (namespace XpEng.Coder09.Models)
+[14:50:21]     cascades into: XpEng.Coder80.Infrastructure
+[14:50:21]     wrote ServiceCollectionExtensions.g.cs
+[14:50:21]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
+[14:50:21] [Tier 3] XpEng.Coder12.Services  (namespace XpEng.Coder12.Services)
+[14:50:21]     cascades into: XpEng.Coder80.Infrastructure
+[14:50:21]     wrote ServiceCollectionExtensions.g.cs
+[14:50:21]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
+[14:50:21] [Tier 4] XpEng.Coder80.Infrastructure  (namespace XpEng.Coder80.Infrastructure)
+[14:50:21]     wrote ServiceCollectionExtensions.g.cs
+[14:50:21]     ServiceCollectionExtensions.Manual.cs already exists — left untouched
+[14:50:21] 
+[14:50:21] Wrote CoderFiles\README-DependencyInjection.md
+[14:50:21] 
+[14:50:21] Done. 12 file(s) written, 7 existing stub(s) left untouched.
+[14:50:21] 
+[14:50:21] Composition root:
+[14:50:21]     var services = new ServiceCollection();
+[14:50:21]     XpEng.Coder03.Views.ServiceCollectionExtensions.AddRegistrations(services);
+[14:50:21]     XpEng.Coder80.Infrastructure.ServiceLocator.Initialize(services.BuildServiceProvider());
