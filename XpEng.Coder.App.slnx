@@ -1,7 +1,6 @@
 <Solution>
   <Folder Name="/BasicTemplates/">
     <File Path="BasicTemplates/BasicClassTemplate.tt" />
-    <File Path="BasicTemplates/ModelsProject.tt" />
     <File Path="BasicTemplates/README T4TemplatesContract.md" />
     <File Path="MainModelGraph.tt" />
   </Folder>
@@ -14,6 +13,7 @@
   <Folder Name="/BasicTemplates/WPF/">
     <File Path="BasicTemplates/WPF/DesignTimeSetup.tt" />
     <File Path="BasicTemplates/WPF/DISetup.tt" />
+    <File Path="BasicTemplates/WPF/ModelsProject.tt" />
     <File Path="BasicTemplates/WPF/PlanSetup.tt" />
   </Folder>
   <Folder Name="/CoderFiles/">

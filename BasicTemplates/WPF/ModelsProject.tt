@@ -21,6 +21,7 @@
 <#@ include file="../Shared/SolutionGraph.ttinclude" #>
 <#@ include file="../Shared/TargetFolders.ttinclude" #>
 <#
+#nullable enable
     // ============================================================
     // FILE FILTERS
     // ============================================================
@@ -160,9 +161,9 @@
 
     foreach (var fileEntry in filesElement.EnumerateArray())
     {
-        string sourceFileName = fileEntry.GetProperty("SourceFileName").GetString();
-        string sourceDirectory = fileEntry.GetProperty("SourceDirectory").GetString();
-        string changeType = fileEntry.GetProperty("ChangeType").GetString();
+        string sourceFileName = fileEntry.GetProperty("SourceFileName").GetString()!;
+        string sourceDirectory = fileEntry.GetProperty("SourceDirectory").GetString()!;
+        string changeType = fileEntry.GetProperty("ChangeType").GetString()!;
 
         if (!ShouldProcess(Filters, $"{sourceFileName}.cs", changeType, () => GetBaseTypesForFile(sourceDirectory, sourceFileName)))
         {
@@ -174,7 +175,7 @@
 
         if (fileEntry.TryGetProperty("OldSourceFileName", out var oldNameEl) && oldNameEl.ValueKind != JsonValueKind.Null)
         {
-            string oldName = oldNameEl.GetString();
+            string? oldName = oldNameEl.GetString();
             if (!string.IsNullOrWhiteSpace(oldName) && oldName != sourceFileName)
             {
                 string oldOutputPath = Path.Combine(TargetDirectory, $"{oldName}.g.cs");
@@ -338,6 +339,9 @@
         sb.AppendLine("        }");
         sb.AppendLine("        for (int i = collection.Count - 1; i >= 0; i--)");
         sb.AppendLine($"            if (!freshIds.Contains(collection[i].{pkName})) collection.RemoveAt(i);");
+        sb.AppendLine();
+        sb.AppendLine("        // Explicitly flag the collection as loaded after a successful database query");
+        sb.AppendLine($"        MainModel.Instance.Is{plural}Loaded = true;");
         sb.AppendLine("        OnRefreshed();");
         sb.AppendLine("    }");
         sb.AppendLine();
@@ -384,21 +388,24 @@
         sb.AppendLine($"    public ObservableCollection<{entityName}> {plural}");
         sb.AppendLine("    {");
         sb.AppendLine($"        get {{ if ({collectionFieldName} == null) {plural} = new ObservableCollection<{entityName}>(); return {collectionFieldName}!; }}");
-        sb.AppendLine("        private set");
-        sb.AppendLine("        {");
-        sb.AppendLine($"            SetProperty(ref {collectionFieldName}, value);");
-        sb.AppendLine($"            OnPropertyChanged(nameof(Is{plural}Loaded));");
-        sb.AppendLine("        }");
+        sb.AppendLine($"        private set => SetProperty(ref {collectionFieldName}, value);");
         sb.AppendLine("    }");
         sb.AppendLine();
-        sb.AppendLine($"    public bool Is{plural}Loaded => {collectionFieldName} != null;");
+        sb.AppendLine($"    private bool _is{plural}Loaded;");
+        sb.AppendLine($"    public bool Is{plural}Loaded");
+        sb.AppendLine("    {");
+        sb.AppendLine($"        get => _is{plural}Loaded;");
+        sb.AppendLine($"        internal set => SetProperty(ref _is{plural}Loaded, value);");
+        sb.AppendLine("    }");
         sb.AppendLine();
         sb.AppendLine($"    internal void Unload{plural}Storage()");
         sb.AppendLine("    {");
         sb.AppendLine($"        if ({collectionFieldName} == null) return;");
         sb.AppendLine($"        {collectionFieldName} = null;");
         sb.AppendLine($"        OnPropertyChanged(nameof({plural}));");
-        sb.AppendLine($"        OnPropertyChanged(nameof(Is{plural}Loaded));");
+        sb.AppendLine();
+        sb.AppendLine("        // Reset the load state flag");
+        sb.AppendLine($"        Is{plural}Loaded = false;");
         sb.AppendLine("    }");
         sb.AppendLine("}");
         sb.AppendLine("}");
@@ -414,6 +421,7 @@
     Write($"Batch complete: {filesWritten} file(s) written, {filesDeleted} deleted, {skippedCount} skipped by filter, {undetectedRelationships} relationship(s) could not be auto-detected (see TODO comments).");
 #>
 <#+
+#nullable enable
 
     // Required by TemplateLog.ttinclude: under the t4 CLI, Host.TemplateFile is empty, so the
     // template cannot discover its own name.
@@ -605,11 +613,11 @@
 
     private sealed class FileFilterRule
     {
-        public string[] NamePatterns;
-        public string[] ExcludeNamePatterns;
-        public string[] ChangeTypes;
-        public string RequiredBaseType;
-        public string[] ExcludedBaseTypes;
+        public string[]? NamePatterns;
+        public string[]? ExcludeNamePatterns;
+        public string[]? ChangeTypes;
+        public string? RequiredBaseType;
+        public string[]? ExcludedBaseTypes;
     }
 
     private static readonly HashSet<string> ScalarTypes = new(StringComparer.OrdinalIgnoreCase) {
@@ -730,10 +738,10 @@
     private (string ChildFk, string ParentKey)? DetectForeignKeyPair(string sourceDirectory, string parentType, string childType)
     {
         var childProps = GetPropertiesForType(sourceDirectory, childType);
-        string navPropName = childProps.FirstOrDefault(p => p.Type.TrimEnd('?') == parentType).Name;
+        string? navPropName = childProps.FirstOrDefault(p => p.Type.TrimEnd('?') == parentType).Name;
         if (navPropName == null) return null;
 
-        string childFk = null;
+        string? childFk = null;
         string candidate = navPropName.EndsWith("Navigation") ? navPropName.Substring(0, navPropName.Length - "Navigation".Length) : navPropName;
         if (childProps.Any(p => p.Name == candidate && !IsEntityLikeType(p.Type))) childFk = candidate;
         if (childFk == null)
@@ -749,7 +757,7 @@
         // an exact-case match would silently miss this and fall back to "Id" instead,
         // pairing the wrong types (string vs int) and producing a compile error.
         var matchedParentProp = parentProps.FirstOrDefault(p => p.Name.Equals(childFk, StringComparison.OrdinalIgnoreCase));
-        string parentKey = matchedParentProp.Name != null ? matchedParentProp.Name
+        string? parentKey = matchedParentProp.Name != null ? matchedParentProp.Name
                           : parentProps.Any(p => p.Name == "Id") ? "Id"
                           : null;
         if (parentKey == null) return null;
@@ -757,7 +765,7 @@
         return (childFk, parentKey);
     }
 
-    private bool NameMatches(string fileName, string[] patterns)
+    private bool NameMatches(string fileName, string[]? patterns)
     {
         if (patterns == null || patterns.Length == 0) return true;
         return patterns.Any(p => Regex.IsMatch(fileName, "^" + Regex.Escape(p).Replace("\\*", ".*").Replace("\\?", ".") + "$", RegexOptions.IgnoreCase));
@@ -787,7 +795,7 @@
     private string GetProjectRootNamespace(string targetDirectory)
     {
         var dir = new DirectoryInfo(targetDirectory);
-        string csprojPath = null;
+        string? csprojPath = null;
         while (dir != null)
         {
             var found = dir.GetFiles("*.csproj").FirstOrDefault();
@@ -797,15 +805,15 @@
         if (csprojPath == null) return "GeneratedModels";
 
         var csprojXml = XDocument.Load(csprojPath);
-        string rootNamespace = csprojXml.Descendants("RootNamespace").FirstOrDefault()?.Value;
+        string? rootNamespace = csprojXml.Descendants("RootNamespace").FirstOrDefault()?.Value;
         if (string.IsNullOrWhiteSpace(rootNamespace)) rootNamespace = Path.GetFileNameWithoutExtension(csprojPath);
-        return rootNamespace;
+        return rootNamespace!;
     }
 
     private string ComputeNamespace(string targetDirectory)
     {
         var dir = new DirectoryInfo(targetDirectory);
-        string csprojPath = null, projectDir = null;
+        string? csprojPath = null, projectDir = null;
         while (dir != null)
         {
             var found = dir.GetFiles("*.csproj").FirstOrDefault();
@@ -816,11 +824,11 @@
 
         string rootNamespace = GetProjectRootNamespace(targetDirectory);
 
-        string relative = GetRelativePathManual(projectDir, targetDirectory);
+        string relative = GetRelativePathManual(projectDir!, targetDirectory);
         if (string.IsNullOrEmpty(relative) || relative == ".") return rootNamespace;
 
         var segments = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).ToList();
-        string leafFolderName = segments.Count > 0 ? segments[segments.Count - 1] : null;
+        string? leafFolderName = segments.Count > 0 ? segments[segments.Count - 1] : null;
 
         bool isConventionalGeneratedFolder = leafFolderName != null &&
             (leafFolderName.Equals("AutoGenerated", StringComparison.OrdinalIgnoreCase) ||
@@ -831,7 +839,7 @@
         // named "Models") — otherwise the computed namespace ends up doubled, e.g.
         // "TBQuiz09.Models.Models", which silently breaks implicit access to sibling types
         // declared directly in the project's real (undoubled) namespace.
-        string rootNamespaceLastSegment = rootNamespace.Split('.').LastOrDefault();
+        string? rootNamespaceLastSegment = rootNamespace.Split('.').LastOrDefault();
         bool duplicatesRootTail = leafFolderName != null && rootNamespaceLastSegment != null &&
             leafFolderName.Equals(rootNamespaceLastSegment, StringComparison.OrdinalIgnoreCase);
 
@@ -857,9 +865,9 @@
         return relativePath.TrimEnd(Path.DirectorySeparatorChar);
     }
 
-    private string Pluralize(string word)
+    private string Pluralize(string? word)
     {
-        if (string.IsNullOrEmpty(word)) return word;
+        if (string.IsNullOrEmpty(word)) return word ?? string.Empty;
         if (word.EndsWith("y") && word.Length > 1 && !"aeiouAEIOU".Contains(word[word.Length - 2]))
             return word.Substring(0, word.Length - 1) + "ies";
         if (word.EndsWith("s") || word.EndsWith("x") || word.EndsWith("z") || word.EndsWith("ch") || word.EndsWith("sh"))
