@@ -363,7 +363,7 @@
         return sb.ToString();
     }
 
-    private string BuildRegistrationScanner(SolutionProject project) {
+ private string BuildRegistrationScanner(SolutionProject project) {
         var sb = new StringBuilder();
         sb.Append(GeneratedBanner("Applies every registration an assembly declares."));
         sb.AppendLine("using System.Reflection;");
@@ -412,6 +412,8 @@
         sb.AppendLine("        //    in implementation or lifetime is a genuine conflict.");
         sb.AppendLine("        var conflicts = services");
         sb.AppendLine("            .GroupBy(descriptor => descriptor.ServiceType)");
+        sb.AppendLine("            // EXEMPTION: Allow Multiple Implementations for Microsoft framework types");
+        sb.AppendLine("            .Where(group => group.Key.FullName == null || !group.Key.FullName.StartsWith(\"Microsoft.\"))");
         sb.AppendLine("            .Where(group => group.Count() > 1)");
         sb.AppendLine("            .Where(group => group.Select(d => (d.ImplementationType, d.Lifetime)).Distinct().Count() > 1)");
         sb.AppendLine("            .ToList();");
@@ -444,6 +446,8 @@
         sb.AppendLine("    private static void CollapseDuplicates(IServiceCollection services) {");
         sb.AppendLine("        var groups = services");
         sb.AppendLine("            .GroupBy(descriptor => descriptor.ServiceType)");
+        sb.AppendLine("            // EXEMPTION: Do not prune framework types that legitimately rely on IEnumerable<T> injection");
+        sb.AppendLine("            .Where(group => group.Key.FullName == null || !group.Key.FullName.StartsWith(\"Microsoft.\"))");
         sb.AppendLine("            .Where(group => group.Count() > 1)");
         sb.AppendLine("            .ToList();");
         sb.AppendLine();
