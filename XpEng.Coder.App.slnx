@@ -15,6 +15,7 @@
     <File Path="BasicTemplates/WPF/DISetup.tt" />
     <File Path="BasicTemplates/WPF/ModelsProject.tt" />
     <File Path="BasicTemplates/WPF/PlanSetup.tt" />
+    <File Path="BasicTemplates/WPF/ViewModelsProject.tt" />
   </Folder>
   <Folder Name="/CoderFiles/">
     <File Path="CoderFiles/DISetup.log.txt" />

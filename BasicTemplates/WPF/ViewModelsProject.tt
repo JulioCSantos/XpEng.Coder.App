@@ -1,0 +1,564 @@
+<#@ template language="C#" hostspecific="true" #>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Text.Json" #>
+<#@ assembly name="System.Xml" #>
+<#@ assembly name="System.Xml.Linq" #>
+<#@ assembly name="System.Memory" #>
+<#@ assembly name="Microsoft.CodeAnalysis" #>
+<#@ assembly name="Microsoft.CodeAnalysis.CSharp" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Text.Json" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Text.RegularExpressions" #>
+<#@ import namespace="System.Xml.Linq" #>
+<#@ import namespace="Microsoft.CodeAnalysis.CSharp" #>
+<#@ import namespace="Microsoft.CodeAnalysis.CSharp.Syntax" #>
+<#@ parameter name="MetadataFilePath" type="System.String" #>
+<#@ parameter name="TargetDirectory" type="System.String" #>
+<#@ include file="../Shared/TemplateLog.ttinclude" #>
+<#@ include file="../Shared/SolutionGraph.ttinclude" #>
+<#@ include file="../Shared/TargetFolders.ttinclude" #>
+<#
+#nullable enable
+    // Block all ViewModels, Menu artifacts, and Manual files from triggering this template
+    var Filters = new[] {
+        new FileFilterRule {
+            NamePatterns = new[] { "*.cs" },
+            ExcludeNamePatterns = new[] { 
+                "*.Designer.cs", 
+                "*.Manual.cs",
+                "*ViewModel.g.cs", 
+                "MainViewModel.g.cs", 
+                "BaseViewModel.g.cs",
+                "MenuNodeViewModel.g.cs",
+                "MenuGroupViewModel.g.cs",
+                "MenuItemViewModel.g.cs",
+                "MenuRegistry.g.cs",
+                "MenuViewModel.g.cs"
+            },
+            ExcludedBaseTypes = new[] { "DbContext" }
+        }
+    };
+
+    if (string.IsNullOrWhiteSpace(MetadataFilePath) || !File.Exists(MetadataFilePath))
+    {
+        LogError("MetadataFilePath is missing or invalid.", null);
+        return string.Empty;
+    }
+    if (string.IsNullOrWhiteSpace(TargetDirectory))
+    {
+        LogError("TargetDirectory was not provided.", null);
+        return string.Empty;
+    }
+
+    string solutionFilePath = FindSolutionFile(TargetDirectory);
+    if (string.IsNullOrWhiteSpace(solutionFilePath)) return string.Empty;
+
+    BuildSolutionGraph(solutionFilePath);
+    var productionProjects = ProductionProjectsByTier();
+    if (productionProjects.Count == 0) return string.Empty;
+
+    var infrastructureProject = productionProjects.Last();
+    string infrastructureNamespace = infrastructureProject.RootNamespace;
+
+    string metadataJson = File.ReadAllText(MetadataFilePath);
+    using var document = JsonDocument.Parse(metadataJson);
+    var root = document.RootElement;
+    
+    string viewModelsFolder = Path.Combine(TargetDirectory, "ViewModels");
+    if (!Directory.Exists(viewModelsFolder)) Directory.CreateDirectory(viewModelsFolder);
+
+    string viewModelsNamespace = ComputeNamespace(viewModelsFolder);
+
+    if (!root.TryGetProperty("Files", out var filesElement)) return string.Empty;
+
+    int filesWritten = 0, filesDeleted = 0, skippedCount = 0;
+    
+    var generatedViewModels = new List<string>();
+    var entityGroups = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+
+    foreach (var fileEntry in filesElement.EnumerateArray())
+    {
+        string sourceFileName = fileEntry.GetProperty("SourceFileName").GetString()!;
+        string sourceDirectory = fileEntry.GetProperty("SourceDirectory").GetString()!;
+        string changeType = fileEntry.GetProperty("ChangeType").GetString()!;
+
+        // CLEAN THE FILE NAME: Strip the .g suffix
+        string cleanEntityName = sourceFileName;
+        if (cleanEntityName.EndsWith(".g")) cleanEntityName = cleanEntityName.Substring(0, cleanEntityName.Length - 2);
+
+        if (!ShouldProcess(Filters, $"{sourceFileName}.cs", changeType, () => GetBaseTypesForFile(sourceDirectory, sourceFileName)))
+        {
+            skippedCount++;
+            continue;
+        }
+
+        string plural = Pluralize(cleanEntityName);
+        string vmClassName = $"{plural}ViewModel";
+        string outputPath = Path.Combine(viewModelsFolder, $"{vmClassName}.g.cs");
+
+        if (fileEntry.TryGetProperty("OldSourceFileName", out var oldNameEl) && oldNameEl.ValueKind != JsonValueKind.Null)
+        {
+            string? oldName = oldNameEl.GetString();
+            if (!string.IsNullOrWhiteSpace(oldName) && oldName != sourceFileName)
+            {
+                string cleanOldName = oldName.EndsWith(".g") ? oldName.Substring(0, oldName.Length - 2) : oldName;
+                string oldOutputPath = Path.Combine(viewModelsFolder, $"{Pluralize(cleanOldName)}ViewModel.g.cs");
+                if (File.Exists(oldOutputPath)) { File.Delete(oldOutputPath); filesDeleted++; }
+            }
+        }
+
+        if (changeType == "Deleted")
+        {
+            if (File.Exists(outputPath)) { File.Delete(outputPath); filesDeleted++; }
+            continue;
+        }
+
+        string sourceFilePath = Path.Combine(sourceDirectory, $"{sourceFileName}.cs");
+        if (!File.Exists(sourceFilePath)) continue;
+
+        string sourceCode = File.ReadAllText(sourceFilePath);
+        var tree = CSharpSyntaxTree.ParseText(sourceCode);
+        var classDecl = tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
+        if (classDecl == null) continue;
+
+        string entityName = classDecl.Identifier.Text;
+        string modelsNamespace = GetProjectRootNamespace(sourceDirectory);
+        
+        generatedViewModels.Add(vmClassName);
+
+        // Parse SqlSchema for the MenuRegistry (Default to "dbo" if not found)
+        string schema = "dbo";
+        var schemaMatch = Regex.Match(sourceCode, @"Schema\s*=\s*\""([^\""]+)\""");
+        if (schemaMatch.Success)
+        {
+            schema = schemaMatch.Groups[1].Value;
+        }
+        if (!entityGroups.ContainsKey(schema)) entityGroups[schema] = new List<string>();
+        entityGroups[schema].Add(entityName);
+
+        // ----------------------------------------------------
+        // GENERATE INDIVIDUAL VIEWMODEL (.g.cs)
+        // ----------------------------------------------------
+        var sb = new StringBuilder();
+        sb.AppendLine("// <auto-generated>");
+        sb.AppendLine($"//     Generated from {sourceFileName}.cs by the ViewModelsProject template.");
+        sb.AppendLine("//     Regenerated whenever the source Model changes.");
+        sb.AppendLine("// </auto-generated>");
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine();
+        sb.AppendLine("using System;");
+        sb.AppendLine("using System.Threading.Tasks;");
+        sb.AppendLine("using System.Collections.ObjectModel;");
+        sb.AppendLine("using CommunityToolkit.Mvvm.Input;");
+        sb.AppendLine($"using {modelsNamespace};");
+        sb.AppendLine($"using {infrastructureNamespace};");
+        sb.AppendLine();
+        sb.AppendLine($"namespace {viewModelsNamespace}");
+        sb.AppendLine("{");
+        sb.AppendLine($"    public partial class {vmClassName} : BaseViewModel");
+        sb.AppendLine("    {");
+        sb.AppendLine("        // 1. Bridge the View to the MainModel's collection");
+        sb.AppendLine($"        public ObservableCollection<{entityName}> {plural} => MainViewModel.Instance.MainModel.{plural};");
+        sb.AppendLine();
+        sb.AppendLine("        #region Commands");
+        sb.AppendLine($"        // 2. The toolkit automatically generates an ICommand named 'Load{plural}Command'");
+        sb.AppendLine("        [RelayCommand]");
+        sb.AppendLine($"        private async Task Load{plural}Async()");
+        sb.AppendLine("        {");
+        sb.AppendLine($"            await {entityName}.LoadAllAsync();");
+        sb.AppendLine($"            OnPropertyChanged(nameof({plural}));");
+        sb.AppendLine("        }");
+        sb.AppendLine("        #endregion Commands");
+        sb.AppendLine();
+        sb.AppendLine("        #region IDisposing");
+        sb.AppendLine("        // 3. IDisposable implementation (Inherited from BaseViewModel)");
+        sb.AppendLine("        protected override void Dispose(bool disposing)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (disposing)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                // Fire the partial method hook for manual cleanup");
+        sb.AppendLine("                OnDisposing();");
+        sb.AppendLine("            }");
+        sb.AppendLine("            base.Dispose(disposing);");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+        sb.AppendLine("        // Hook definition: Erased by the compiler if not implemented in the .Manual.cs file");
+        sb.AppendLine("        partial void OnDisposing();");
+        sb.AppendLine("        #endregion IDisposing");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+
+        File.WriteAllText(outputPath, sb.ToString());
+        filesWritten++;
+    }
+
+    // ----------------------------------------------------
+    // STATIC FILE GENERATORS
+    // ----------------------------------------------------
+    void GenerateFile(string fileName, string content)
+    {
+        File.WriteAllText(Path.Combine(viewModelsFolder, fileName), content);
+        filesWritten++;
+    }
+
+    // 1. BaseViewModel.g.cs
+    GenerateFile("BaseViewModel.g.cs", $@"// <auto-generated>
+//     Generated by the ViewModelsProject template.
+//     Provides the foundational IDisposable implementation and common properties.
+// </auto-generated>
+#nullable enable
+
+using System;
+using CommunityToolkit.Mvvm.ComponentModel;
+
+namespace {viewModelsNamespace}
+{{
+    public abstract partial class BaseViewModel : ObservableObject, IDisposable
+    {{
+        [ObservableProperty]
+        private string? _viewType;
+
+        #region IDisposing
+        private bool _disposed;
+
+        public void Dispose()
+        {{
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }}
+
+        protected virtual void Dispose(bool disposing)
+        {{
+            if (!_disposed)
+            {{
+                if (disposing)
+                {{
+                    // Clean up managed resources (e.g., event subscriptions)
+                }}
+                _disposed = true;
+            }}
+        }}
+        #endregion IDisposing
+    }}
+}}");
+
+    // 2. MenuNodeViewModel.g.cs
+    GenerateFile("MenuNodeViewModel.g.cs", $@"// <auto-generated>
+//     Generated by the ViewModelsProject template.
+// </auto-generated>
+#nullable enable
+
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+
+namespace {viewModelsNamespace}
+{{
+    public abstract partial class MenuNodeViewModel : ObservableObject
+    {{
+        [ObservableProperty]
+        private string _title = string.Empty;
+
+        [ObservableProperty]
+        private bool _isExpanded;
+
+        [ObservableProperty]
+        private bool _isSelected;
+
+        public ObservableCollection<MenuNodeViewModel> Children {{ get; }} = new();
+    }}
+}}");
+
+    // 3. MenuGroupViewModel.g.cs
+    GenerateFile("MenuGroupViewModel.g.cs", $@"// <auto-generated>
+//     Generated by the ViewModelsProject template.
+// </auto-generated>
+#nullable enable
+
+namespace {viewModelsNamespace}
+{{
+    public partial class MenuGroupViewModel : MenuNodeViewModel
+    {{
+        public MenuGroupViewModel(string title)
+        {{
+            Title = title;
+        }}
+    }}
+}}");
+
+    // 4. MenuItemViewModel.g.cs
+    GenerateFile("MenuItemViewModel.g.cs", $@"// <auto-generated>
+//     Generated by the ViewModelsProject template.
+// </auto-generated>
+#nullable enable
+
+using CommunityToolkit.Mvvm.Input;
+
+namespace {viewModelsNamespace}
+{{
+    public partial class MenuItemViewModel : MenuNodeViewModel
+    {{
+        public string TargetViewModelName {{ get; }}
+
+        public MenuItemViewModel(string title, string targetViewModelName)
+        {{
+            Title = title;
+            TargetViewModelName = targetViewModelName;
+        }}
+
+        #region Commands
+        [RelayCommand]
+        private void Activate()
+        {{
+            // TODO: Route TargetViewModelName to the RegionCell for view injection
+        }}
+        #endregion Commands
+    }}
+}}");
+
+    // 5. MenuRegistry.g.cs (Dynamic based on SqlSchema)
+    var registrySb = new StringBuilder();
+    registrySb.AppendLine("// <auto-generated>");
+    registrySb.AppendLine("//     Generated by the ViewModelsProject template.");
+    registrySb.AppendLine("// </auto-generated>");
+    registrySb.AppendLine("#nullable enable");
+    registrySb.AppendLine();
+    registrySb.AppendLine("using System.Collections.Generic;");
+    registrySb.AppendLine("using Microsoft.Extensions.DependencyInjection;"); // <-- FIX HERE
+    registrySb.AppendLine($"using {infrastructureNamespace};");
+    registrySb.AppendLine();
+    registrySb.AppendLine($"namespace {viewModelsNamespace}");
+    registrySb.AppendLine("{");
+    registrySb.AppendLine("    public partial class MenuRegistry");
+    registrySb.AppendLine("    {");
+    registrySb.AppendLine("        #region MenuRegistry's Instance Singleton");
+    registrySb.AppendLine("        public static MenuRegistry Instance =>");
+    registrySb.AppendLine("            global::MILL80.Infrastructure.ServiceLocator.CurrentProvider.GetRequiredService<MenuRegistry>();");
+    registrySb.AppendLine();
+    registrySb.AppendLine("        protected internal MenuRegistry() { }");
+    registrySb.AppendLine("        #endregion MenuRegistry's Instance Singleton");
+    registrySb.AppendLine();
+    registrySb.AppendLine("        public List<MenuNodeViewModel> GetDefaultMenu()");
+    registrySb.AppendLine("        {");
+    registrySb.AppendLine("            var menu = new List<MenuNodeViewModel>();");
+    registrySb.AppendLine();
+    
+    foreach (var kvp in entityGroups.OrderBy(x => x.Key))
+    {
+        string schemaVarName = kvp.Key.ToLower() + "Group";
+        registrySb.AppendLine($"            var {schemaVarName} = new MenuGroupViewModel(\"{kvp.Key}\");");
+        foreach (var entity in kvp.Value.OrderBy(x => x))
+        {
+            string pluralTitle = Pluralize(entity);
+            string vmName = $"{pluralTitle}ViewModel";
+            registrySb.AppendLine($"            {schemaVarName}.Children.Add(new MenuItemViewModel(\"{pluralTitle}\", \"{vmName}\"));");
+        }
+        registrySb.AppendLine($"            menu.Add({schemaVarName});");
+        registrySb.AppendLine();
+    }
+    
+    registrySb.AppendLine("            CustomizeMenu(ref menu);");
+    registrySb.AppendLine("            return menu;");
+    registrySb.AppendLine("        }");
+    registrySb.AppendLine();
+    registrySb.AppendLine("        partial void CustomizeMenu(ref List<MenuNodeViewModel> menu);");
+    registrySb.AppendLine("    }");
+    registrySb.AppendLine("}");
+    GenerateFile("MenuRegistry.g.cs", registrySb.ToString());
+
+    // 6. MenuViewModel.g.cs
+    GenerateFile("MenuViewModel.g.cs", $@"// <auto-generated>
+//     Generated by the ViewModelsProject template.
+// </auto-generated>
+#nullable enable
+
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+
+namespace {viewModelsNamespace}
+{{
+    public partial class MenuViewModel : BaseViewModel
+    {{
+        private ObservableCollection<MenuNodeViewModel>? _menuItems;
+        
+        public ObservableCollection<MenuNodeViewModel> MenuItems => 
+            _menuItems ??= new ObservableCollection<MenuNodeViewModel>(MenuRegistry.Instance.GetDefaultMenu());
+    }}
+}}");
+
+    // ----------------------------------------------------
+    // GENERATE MainViewModel (.g.cs)
+    // ----------------------------------------------------
+    if (generatedViewModels.Count > 0)
+    {
+        string mainVmOutputPath = Path.Combine(viewModelsFolder, "MainViewModel.g.cs");
+        var mainSb = new StringBuilder();
+        mainSb.AppendLine("// <auto-generated>");
+        mainSb.AppendLine("//     Generated by the ViewModelsProject template.");
+        mainSb.AppendLine("//     Aggregates all generated ViewModels via lazy instantiation.");
+        mainSb.AppendLine("// </auto-generated>");
+        mainSb.AppendLine("#nullable enable");
+        mainSb.AppendLine();
+        mainSb.AppendLine("using System;");
+        mainSb.AppendLine("using System.Reflection;");
+        mainSb.AppendLine();
+        mainSb.AppendLine($"namespace {viewModelsNamespace}");
+        mainSb.AppendLine("{");
+        mainSb.AppendLine("    public partial class MainViewModel : IDisposable");
+        mainSb.AppendLine("    {");
+        
+        // Inject the MenuViewModel
+        mainSb.AppendLine("        private MenuViewModel? _menu;");
+        mainSb.AppendLine("        public MenuViewModel Menu => _menu ??= new MenuViewModel();");
+        mainSb.AppendLine();
+
+        // Inject the Entity ViewModels
+        foreach (var vmName in generatedViewModels)
+        {
+            string fieldName = $"_{char.ToLower(vmName[0])}{vmName.Substring(1)}";
+            mainSb.AppendLine($"        private {vmName}? {fieldName};");
+            mainSb.AppendLine($"        public {vmName} {vmName} => {fieldName} ??= new {vmName}();");
+            mainSb.AppendLine();
+        }
+
+        mainSb.AppendLine("        #region IDisposing");
+        mainSb.AppendLine("        private bool _disposed;");
+        mainSb.AppendLine();
+        mainSb.AppendLine("        public void Dispose()");
+        mainSb.AppendLine("        {");
+        mainSb.AppendLine("            Dispose(true);");
+        mainSb.AppendLine("            GC.SuppressFinalize(this);");
+        mainSb.AppendLine("        }");
+        mainSb.AppendLine();
+        mainSb.AppendLine("        protected virtual void Dispose(bool disposing)");
+        mainSb.AppendLine("        {");
+        mainSb.AppendLine("            if (!_disposed)");
+        mainSb.AppendLine("            {");
+        mainSb.AppendLine("                if (disposing)");
+        mainSb.AppendLine("                {");
+        mainSb.AppendLine("                    // Safely cast a net over all private backing fields (both .g.cs and .Manual.cs)");
+        mainSb.AppendLine("                    // to dispose components without triggering the public lazy-instantiators.");
+        mainSb.AppendLine("                    var fields = this.GetType().GetFields(BindingFlags.NonPublic | BindingFlags.Instance);");
+        mainSb.AppendLine("                    foreach (var field in fields)");
+        mainSb.AppendLine("                    {");
+        mainSb.AppendLine("                        if (field.GetValue(this) is IDisposable disposable)");
+        mainSb.AppendLine("                        {");
+        mainSb.AppendLine("                            disposable.Dispose();");
+        mainSb.AppendLine("                        }");
+        mainSb.AppendLine("                    }");
+        mainSb.AppendLine("                }");
+        mainSb.AppendLine("                _disposed = true;");
+        mainSb.AppendLine("            }");
+        mainSb.AppendLine("        }");
+        mainSb.AppendLine("        #endregion IDisposing");
+        mainSb.AppendLine("    }");
+        mainSb.AppendLine("}");
+
+        File.WriteAllText(mainVmOutputPath, mainSb.ToString());
+        filesWritten++;
+    }
+
+    Log("");
+    Log($"Batch complete: {filesWritten} file(s) written, {filesDeleted} deleted, {skippedCount} skipped.");
+    FlushLog(solutionFilePath, TargetDirectory);
+    Write($"Batch complete: {filesWritten} file(s) written, {filesDeleted} deleted.");
+#>
+<#+
+#nullable enable
+    private string TemplateNameFallback { get { return "ViewModelsProject"; } }
+
+    private string FindSolutionFile(string startDirectory) {
+        var directory = new DirectoryInfo(startDirectory);
+        while (directory != null) {
+            var slnx = directory.GetFiles("*.slnx").FirstOrDefault();
+            if (slnx != null) return slnx.FullName;
+            var sln = directory.GetFiles("*.sln").FirstOrDefault();
+            if (sln != null) return sln.FullName;
+            directory = directory.Parent;
+        }
+        return string.Empty;
+    }
+
+    private string Pluralize(string? word)
+    {
+        if (string.IsNullOrEmpty(word)) return word ?? string.Empty;
+        if (word.EndsWith("y") && word.Length > 1 && !"aeiouAEIOU".Contains(word[word.Length - 2]))
+            return word.Substring(0, word.Length - 1) + "ies";
+        if (word.EndsWith("s") || word.EndsWith("x") || word.EndsWith("z") || word.EndsWith("ch") || word.EndsWith("sh"))
+            return word + "es";
+        return word + "s";
+    }
+
+    private string GetProjectRootNamespace(string targetDirectory)
+    {
+        var dir = new DirectoryInfo(targetDirectory);
+        string? csprojPath = null;
+        while (dir != null)
+        {
+            var found = dir.GetFiles("*.csproj").FirstOrDefault();
+            if (found != null) { csprojPath = found.FullName; break; }
+            dir = dir.Parent;
+        }
+        if (csprojPath == null) return "GeneratedModels";
+
+        var csprojXml = XDocument.Load(csprojPath);
+        string? rootNamespace = csprojXml.Descendants("RootNamespace").FirstOrDefault()?.Value;
+        if (string.IsNullOrWhiteSpace(rootNamespace)) rootNamespace = Path.GetFileNameWithoutExtension(csprojPath);
+        return rootNamespace!;
+    }
+
+    private string ComputeNamespace(string targetDirectory)
+    {
+        var dir = new DirectoryInfo(targetDirectory);
+        string? csprojPath = null, projectDir = null;
+        while (dir != null)
+        {
+            var found = dir.GetFiles("*.csproj").FirstOrDefault();
+            if (found != null) { csprojPath = found.FullName; projectDir = dir.FullName; break; }
+            dir = dir.Parent;
+        }
+        if (csprojPath == null) return "GeneratedViewModels";
+
+        string rootNamespace = GetProjectRootNamespace(targetDirectory);
+        
+        var relative = targetDirectory.Substring(projectDir!.Length).Trim(Path.DirectorySeparatorChar);
+        bool inViewModelsFolder = relative.EndsWith("ViewModels", StringComparison.OrdinalIgnoreCase) || targetDirectory.EndsWith("ViewModels");
+        
+        if (inViewModelsFolder && !rootNamespace.EndsWith("ViewModels", StringComparison.OrdinalIgnoreCase))
+        {
+            return rootNamespace + ".ViewModels";
+        }
+        
+        return rootNamespace;
+    }
+
+    private sealed class FileFilterRule
+    {
+        public string[]? NamePatterns;
+        public string[]? ExcludeNamePatterns;
+        public string[]? ChangeTypes;
+        public string? RequiredBaseType;
+        public string[]? ExcludedBaseTypes;
+    }
+
+    private bool NameMatches(string fileName, string[]? patterns)
+    {
+        if (patterns == null || patterns.Length == 0) return true;
+        return patterns.Any(p => Regex.IsMatch(fileName, "^" + Regex.Escape(p).Replace("\\*", ".*").Replace("\\?", ".") + "$", RegexOptions.IgnoreCase));
+    }
+
+    private bool RuleMatches(FileFilterRule rule, string fileName, string changeType, Func<List<string>> getBaseTypes)
+    {
+        if (!NameMatches(fileName, rule.NamePatterns)) return false;
+        if (rule.ExcludeNamePatterns != null && NameMatches(fileName, rule.ExcludeNamePatterns)) return false;
+        if (rule.ChangeTypes != null && rule.ChangeTypes.Length > 0 && !rule.ChangeTypes.Contains(changeType, StringComparer.OrdinalIgnoreCase)) return false;
+        return true;
+    }
+
+    private bool ShouldProcess(FileFilterRule[] rules, string fileName, string changeType, Func<List<string>> getBaseTypes)
+        => rules.Any(r => RuleMatches(r, fileName, changeType, getBaseTypes));
+
+    private List<string> GetBaseTypesForFile(string dir, string file) => new List<string>();
+#>
